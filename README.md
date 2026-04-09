@@ -10,7 +10,7 @@
 [![Platform](https://img.shields.io/badge/platform-Ubuntu%2022.04-orange.svg)](https://ubuntu.com)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0-green.svg)](https://nodejs.org)
 
-[快速开始](#快速开始) • [工作原理](#工作原理) • [安装部署](#安装部署) • [使用教程](#使用教程) • [常见问题](#常见问题)
+[💡 这是什么](#-这是什么) • [🎬 工作原理](#-工作原理) • [🚀 快速开始](#-快速开始) • [📖 使用教程](#-使用教程) • [❓ 常见问题](#-常见问题)
 
 </div>
 
