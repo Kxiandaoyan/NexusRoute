@@ -135,47 +135,40 @@ next_step "Configuring eth1 network interface"
 
 log_info "Configuring eth1 static IP: 192.168.100.1/24"
 
-# Find netplan configuration file
-NETPLAN_FILE=$(ls /etc/netplan/*.yaml 2>/dev/null | head -n 1)
+# Check if eth1 already has the correct IP
+if ip addr show eth1 | grep -q "192.168.100.1/24"; then
+    log_info "eth1 already configured with 192.168.100.1/24, skipping"
+else
+    # Create a separate netplan configuration file for eth1 only
+    # This will not affect eth0's existing configuration
+    NETPLAN_ETH1_FILE="/etc/netplan/99-nexusroute-eth1.yaml"
 
-if [ -z "$NETPLAN_FILE" ]; then
-    NETPLAN_FILE="/etc/netplan/01-netcfg.yaml"
-fi
+    log_info "Creating netplan configuration for eth1: $NETPLAN_ETH1_FILE"
 
-log_info "Using netplan configuration file: $NETPLAN_FILE"
-
-# Backup original configuration
-if [ -f "$NETPLAN_FILE" ]; then
-    cp "$NETPLAN_FILE" "${NETPLAN_FILE}.backup"
-    log_info "Original configuration backed up to ${NETPLAN_FILE}.backup"
-fi
-
-# Write new configuration
-cat > "$NETPLAN_FILE" <<EOF
+    cat > "$NETPLAN_ETH1_FILE" <<EOF
 network:
   version: 2
   renderer: networkd
   ethernets:
-    eth0:
-      dhcp4: true
     eth1:
       dhcp4: false
       addresses:
         - 192.168.100.1/24
 EOF
 
-log_info "Applying netplan configuration..."
-netplan apply
+    log_info "Applying netplan configuration..."
+    netplan apply
 
-# Wait for network configuration to take effect
-sleep 2
+    # Wait for network configuration to take effect
+    sleep 2
 
-# Verify configuration
-if ip addr show eth1 | grep -q "192.168.100.1/24"; then
-    log_info "eth1 configured successfully"
-else
-    log_error "eth1 configuration failed"
-    exit 1
+    # Verify configuration
+    if ip addr show eth1 | grep -q "192.168.100.1/24"; then
+        log_info "eth1 configured successfully"
+    else
+        log_error "eth1 configuration failed"
+        exit 1
+    fi
 fi
 
 # Step 4: Update system and install basic dependencies
