@@ -1,0 +1,26 @@
+# 排除的文档文件
+SPEC.md
+PROJECT_SUMMARY.md
+plan.md
+
+# 排除图片说明文件
+pic/PLACEHOLDER.txt
+pic/README.md
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 编辑器文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 日志文件
+*.log
+
+# 临时文件
+*.tmp
+*.bak

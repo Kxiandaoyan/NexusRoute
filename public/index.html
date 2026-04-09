@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexusRoute - 代理网关</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .status-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .status-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .status-label {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .status-value {
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+
+        .status-offline {
+            background: #dc3545;
+        }
+
+        .status-online {
+            background: #28a745;
+            animation: pulse 2s infinite;
+        }
+
+        .status-configuring {
+            background: #ffc107;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            color: #333;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .form-select {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #333;
+            background: white;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        .form-select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-select:disabled {
+            background: #f5f5f5;
+            cursor: not-allowed;
+        }
+
+        .optional-label {
+            color: #999;
+            font-weight: 400;
+            font-size: 12px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>NexusRoute</h1>
+            <p>多层代理网关系统</p>
+        </div>
+
+        <div id="unauthorizedAlert" class="alert alert-warning hidden">
+            设备未授权，请等待管理员批准后使用
+        </div>
+
+        <div class="status-card">
+            <div class="status-row">
+                <span class="status-label">当前设备</span>
+                <span class="status-value" id="deviceIP">加载中...</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">连接状态</span>
+                <span class="status-value">
+                    <span class="status-indicator" id="statusIndicator"></span>
+                    <span id="statusText">检测中...</span>
+                </span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">出口节点</span>
+                <span class="status-value" id="exitIP">-</span>
+            </div>
+        </div>
+
+        <div id="configForm">
+            <div class="form-group">
+                <label class="form-label">第一跳 <span style="color: #dc3545;">*</span></label>
+                <select class="form-select" id="node1Select">
+                    <option value="">请选择节点</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">第二跳 <span class="optional-label">(可选)</span></label>
+                <select class="form-select" id="node2Select">
+                    <option value="">不使用</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">第三跳 <span class="optional-label">(可选)</span></label>
+                <select class="form-select" id="node3Select">
+                    <option value="">不使用</option>
+                </select>
+            </div>
+
+            <button class="btn btn-primary" id="applyBtn" onclick="applyConfig()">
+                应用配置
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let isConfiguring = false;
+        let debounceTimer = null;
+
+        // 加载节点列表
+        async function loadNodes() {
+            try {
+                const response = await fetch('/api/user/nodes');
+                const data = await response.json();
+
+                if (data.success) {
+                    const selects = [
+                        document.getElementById('node1Select'),
+                        document.getElementById('node2Select'),
+                        document.getElementById('node3Select')
+                    ];
+
+                    selects.forEach((select, index) => {
+                        const currentValue = select.value;
+
+                        // 清空选项（保留第一个默认选项）
+                        while (select.options.length > 1) {
+                            select.remove(1);
+                        }
+
+                        // 添加节点选项
+                        data.nodes.forEach(node => {
+                            const option = document.createElement('option');
+                            option.value = node.id;
+                            option.textContent = `${node.name} (${node.protocol})`;
+                            select.appendChild(option);
+                        });
+
+                        // 恢复之前的选择
+                        if (currentValue) {
+                            select.value = currentValue;
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('加载节点失败:', error);
+            }
+        }
+
+        // 加载状态
+        async function loadStatus() {
+            try {
+                const response = await fetch('/api/user/status');
+                const data = await response.json();
+
+                if (data.success) {
+                    // 更新设备IP
+                    document.getElementById('deviceIP').textContent = data.ip;
+
+                    // 更新状态
+                    const statusIndicator = document.getElementById('statusIndicator');
+                    const statusText = document.getElementById('statusText');
+                    const exitIP = document.getElementById('exitIP');
+                    const unauthorizedAlert = document.getElementById('unauthorizedAlert');
+                    const configForm = document.getElementById('configForm');
+
+                    if (data.status === 'unauthorized') {
+                        statusIndicator.className = 'status-indicator status-offline';
+                        statusText.textContent = '未授权';
+                        exitIP.textContent = '-';
+                        unauthorizedAlert.classList.remove('hidden');
+                        configForm.style.display = 'none';
+                    } else if (data.status === 'online') {
+                        statusIndicator.className = 'status-indicator status-online';
+                        statusText.textContent = '已联机';
+                        exitIP.textContent = data.exit_ip || '-';
+                        unauthorizedAlert.classList.add('hidden');
+                        configForm.style.display = 'block';
+
+                        // 更新当前路由选择
+                        if (data.current_route) {
+                            const nodes = data.current_route;
+                            // 这里可以根据节点名称反向查找ID并设置选择
+                        }
+                    } else {
+                        statusIndicator.className = 'status-indicator status-offline';
+                        statusText.textContent = '未联机';
+                        exitIP.textContent = '-';
+                        unauthorizedAlert.classList.add('hidden');
+                        configForm.style.display = 'block';
+                    }
+                }
+            } catch (error) {
+                console.error('加载状态失败:', error);
+            }
+        }
+
+        // 应用配置（带防抖）
+        function applyConfig() {
+            if (isConfiguring) {
+                return;
+            }
+
+            // 清除之前的定时器
+            if (debounceTimer) {
+                clearTimeout(debounceTimer);
+            }
+
+            // 5秒防抖
+            debounceTimer = setTimeout(() => {
+                submitConfig();
+            }, 100);
+        }
+
+        // 提交配置
+        async function submitConfig() {
+            const node1 = document.getElementById('node1Select').value;
+            const node2 = document.getElementById('node2Select').value;
+            const node3 = document.getElementById('node3Select').value;
+
+            if (!node1) {
+                alert('请选择第一跳节点');
+                return;
+            }
+
+            isConfiguring = true;
+            const applyBtn = document.getElementById('applyBtn');
+            const originalText = applyBtn.innerHTML;
+            applyBtn.disabled = true;
+            applyBtn.innerHTML = '<span class="loading"></span>配置中...';
+
+            // 更新状态为配置中
+            const statusIndicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            statusIndicator.className = 'status-indicator status-configuring';
+            statusText.textContent = '配置中';
+
+            try {
+                const response = await fetch('/api/user/set-route', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        node1_id: parseInt(node1),
+                        node2_id: node2 ? parseInt(node2) : null,
+                        node3_id: node3 ? parseInt(node3) : null
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // 等待3秒后刷新状态
+                    setTimeout(() => {
+                        loadStatus();
+                        isConfiguring = false;
+                        applyBtn.disabled = false;
+                        applyBtn.innerHTML = originalText;
+                    }, 3000);
+                } else {
+                    alert('配置失败: ' + data.message);
+                    isConfiguring = false;
+                    applyBtn.disabled = false;
+                    applyBtn.innerHTML = originalText;
+                    loadStatus();
+                }
+            } catch (error) {
+                alert('配置失败: ' + error.message);
+                isConfiguring = false;
+                applyBtn.disabled = false;
+                applyBtn.innerHTML = originalText;
+                loadStatus();
+            }
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            loadNodes();
+            loadStatus();
+
+            // 每10秒刷新一次状态
+            setInterval(loadStatus, 10000);
+        });
+    </script>
+</body>
+</html>

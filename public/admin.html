@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NexusRoute - 管理后台</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background: #f5f6fa;
+            color: #333;
+        }
+
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .login-box {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-header h1 {
+            font-size: 28px;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .login-header p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            color: #333;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 14px;
+            width: auto;
+        }
+
+        .admin-container {
+            display: none;
+        }
+
+        .navbar {
+            background: white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .navbar-brand {
+            font-size: 20px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        .navbar-user {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .main-content {
+            max-width: 1200px;
+            margin: 24px auto;
+            padding: 0 24px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            color: #666;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            color: #667eea;
+            border-bottom-color: #667eea;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th {
+            text-align: left;
+            padding: 12px;
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .table td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+            font-size: 14px;
+        }
+
+        .table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .badge-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-title {
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <!-- 登录页面 -->
+    <div id="loginContainer" class="login-container">
+        <div class="login-box">
+            <div class="login-header">
+                <h1>NexusRoute</h1>
+                <p>管理后台登录</p>
+            </div>
+
+            <div id="loginError" class="alert alert-error hidden"></div>
+
+            <form onsubmit="login(event)">
+                <div class="form-group">
+                    <label class="form-label">用户名</label>
+                    <input type="text" class="form-input" id="username" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">密码</label>
+                    <input type="password" class="form-input" id="password" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary" id="loginBtn">登录</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 管理后台 -->
+    <div id="adminContainer" class="admin-container">
+        <nav class="navbar">
+            <div class="navbar-brand">NexusRoute 管理后台</div>
+            <div class="navbar-user">
+                <span id="adminUsername"></span>
+                <button class="btn btn-secondary btn-sm" onclick="logout()">退出</button>
+            </div>
+        </nav>
+
+        <div class="main-content">
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('nodes')">节点管理</button>
+                <button class="tab" onclick="switchTab('devices')">设备审批</button>
+                <button class="tab" onclick="switchTab('users')">用户列表</button>
+                <button class="tab" onclick="switchTab('system')">系统管理</button>
+            </div>
+
+            <!-- 节点管理 -->
+            <div id="nodesTab" class="tab-content active">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">节点列表</h2>
+                        <button class="btn btn-primary btn-sm" onclick="showAddNodeModal()">添加节点</button>
+                    </div>
+
+                    <div id="nodesTableContainer"></div>
+                </div>
+            </div>
+
+            <!-- 设备审批 -->
+            <div id="devicesTab" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">待审批设备</h2>
+                        <button class="btn btn-secondary btn-sm" onclick="loadPendingDevices()">刷新</button>
+                    </div>
+
+                    <div id="devicesTableContainer"></div>
+                </div>
+            </div>
+
+            <!-- 用户列表 -->
+            <div id="usersTab" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">已授权用户</h2>
+                        <button class="btn btn-secondary btn-sm" onclick="loadUsers()">刷新</button>
+                    </div>
+
+                    <div id="usersTableContainer"></div>
+                </div>
+            </div>
+
+            <!-- 系统管理 -->
+            <div id="systemTab" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">系统操作</h2>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <button class="btn btn-danger" onclick="restartAll()">全局重启所有代理</button>
+                        <p style="color: #666; font-size: 14px;">
+                            此操作将重启所有用户的 Xray 实例，所有连接将短暂中断。
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加/编辑节点模态框 -->
+    <div id="nodeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="nodeModalTitle">添加节点</h3>
+                <button class="close-btn" onclick="closeNodeModal()">&times;</button>
+            </div>
+
+            <form onsubmit="saveNode(event)">
+                <div class="form-group">
+                    <label class="form-label">节点名称</label>
+                    <input type="text" class="form-input" id="nodeName" required>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">协议</label>
+                        <select class="form-input" id="nodeProtocol" onchange="updateNodeForm()" required>
+                            <option value="vmess">VMess</option>
+                            <option value="vless">VLESS</option>
+                            <option value="trojan">Trojan</option>
+                            <option value="shadowsocks">Shadowsocks</option>
+                            <option value="socks">Socks5</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">传输协议</label>
+                        <select class="form-input" id="nodeNetwork" onchange="updateNodeForm()">
+                            <option value="tcp">TCP</option>
+                            <option value="ws">WebSocket</option>
+                            <option value="grpc">gRPC</option>
+                            <option value="h2">HTTP/2</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">服务器地址</label>
+                        <input type="text" class="form-input" id="nodeAddress" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">端口</label>
+                        <input type="number" class="form-input" id="nodePort" required>
+                    </div>
+                </div>
+
+                <div id="uuidField" class="form-group">
+                    <label class="form-label">UUID</label>
+                    <input type="text" class="form-input" id="nodeUuid">
+                </div>
+
+                <div id="passwordField" class="form-group hidden">
+                    <label class="form-label">密码</label>
+                    <input type="text" class="form-input" id="nodePassword">
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">TLS</label>
+                        <select class="form-input" id="nodeTls" onchange="updateNodeForm()">
+                            <option value="none">不使用</option>
+                            <option value="tls">TLS</option>
+                            <option value="xtls">XTLS</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="sniField">
+                        <label class="form-label">SNI</label>
+                        <input type="text" class="form-input" id="nodeSni">
+                    </div>
+                </div>
+
+                <div id="wsFields" class="hidden">
+                    <div class="form-group">
+                        <label class="form-label">WebSocket Path</label>
+                        <input type="text" class="form-input" id="nodeWsPath" placeholder="/">
+                    </div>
+                </div>
+
+                <div id="grpcFields" class="hidden">
+                    <div class="form-group">
+                        <label class="form-label">gRPC Service Name</label>
+                        <input type="text" class="form-input" id="nodeGrpcService">
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 12px; margin-top: 24px;">
+                    <button type="submit" class="btn btn-primary">保存</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeNodeModal()">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let token = localStorage.getItem('nexusroute_token');
+        let currentNodeId = null;
+
+        // 登录
+        async function login(event) {
+            event.preventDefault();
+
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('loginBtn');
+            const loginError = document.getElementById('loginError');
+
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<span class="loading"></span>登录中...';
+            loginError.classList.add('hidden');
+
+            try {
+                const response = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    token = data.token;
+                    localStorage.setItem('nexusroute_token', token);
+                    showAdminPanel(username);
+                } else {
+                    loginError.textContent = data.message || '登录失败';
+                    loginError.classList.remove('hidden');
+                }
+            } catch (error) {
+                loginError.textContent = '网络错误: ' + error.message;
+                loginError.classList.remove('hidden');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = '登录';
+            }
+        }
+
+        // 显示管理面板
+        function showAdminPanel(username) {
+            document.getElementById('loginContainer').style.display = 'none';
+            document.getElementById('adminContainer').style.display = 'block';
+            document.getElementById('adminUsername').textContent = username;
+
+            loadNodes();
+            loadPendingDevices();
+            loadUsers();
+        }
+
+        // 退出登录
+        function logout() {
+            localStorage.removeItem('nexusroute_token');
+            location.reload();
+        }
+
+        // 切换标签
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            event.target.classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.add('active');
+        }
+
+        // 加载节点列表
+        async function loadNodes() {
+            try {
+                const response = await fetch('/api/admin/nodes', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const container = document.getElementById('nodesTableContainer');
+
+                    if (data.nodes.length === 0) {
+                        container.innerHTML = '<div class="empty-state">暂无节点，请添加节点</div>';
+                        return;
+                    }
+
+                    let html = '<table class="table"><thead><tr><th>名称</th><th>协议</th><th>地址</th><th>端口</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+
+                    data.nodes.forEach(node => {
+                        html += `
+                            <tr>
+                                <td>${node.name}</td>
+                                <td>${node.protocol.toUpperCase()}</td>
+                                <td>${node.address}</td>
+                                <td>${node.port}</td>
+                                <td><span class="badge ${node.enabled ? 'badge-success' : 'badge-danger'}">${node.enabled ? '启用' : '禁用'}</span></td>
+                                <td>
+                                    <button class="btn btn-danger btn-sm" onclick="deleteNode(${node.id})">删除</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                }
+            } catch (error) {
+                console.error('加载节点失败:', error);
+            }
+        }
+
+        // 显示添加节点模态框
+        function showAddNodeModal() {
+            currentNodeId = null;
+            document.getElementById('nodeModalTitle').textContent = '添加节点';
+            document.getElementById('nodeModal').classList.add('active');
+            document.querySelector('#nodeModal form').reset();
+            updateNodeForm();
+        }
+
+        // 关闭节点模态框
+        function closeNodeModal() {
+            document.getElementById('nodeModal').classList.remove('active');
+        }
+
+        // 更新节点表单（根据协议显示不同字段）
+        function updateNodeForm() {
+            const protocol = document.getElementById('nodeProtocol').value;
+            const network = document.getElementById('nodeNetwork').value;
+            const tls = document.getElementById('nodeTls').value;
+
+            // UUID字段
+            const uuidField = document.getElementById('uuidField');
+            const passwordField = document.getElementById('passwordField');
+
+            if (protocol === 'vmess' || protocol === 'vless') {
+                uuidField.classList.remove('hidden');
+                passwordField.classList.add('hidden');
+            } else {
+                uuidField.classList.add('hidden');
+                passwordField.classList.remove('hidden');
+            }
+
+            // WebSocket字段
+            const wsFields = document.getElementById('wsFields');
+            wsFields.classList.toggle('hidden', network !== 'ws');
+
+            // gRPC字段
+            const grpcFields = document.getElementById('grpcFields');
+            grpcFields.classList.toggle('hidden', network !== 'grpc');
+
+            // SNI字段
+            const sniField = document.getElementById('sniField');
+            sniField.classList.toggle('hidden', tls === 'none');
+        }
+
+        // 保存节点
+        async function saveNode(event) {
+            event.preventDefault();
+
+            const nodeData = {
+                name: document.getElementById('nodeName').value,
+                protocol: document.getElementById('nodeProtocol').value,
+                address: document.getElementById('nodeAddress').value,
+                port: parseInt(document.getElementById('nodePort').value),
+                network: document.getElementById('nodeNetwork').value,
+                tls: document.getElementById('nodeTls').value,
+                uuid: document.getElementById('nodeUuid').value || null,
+                password: document.getElementById('nodePassword').value || null,
+                sni: document.getElementById('nodeSni').value || null,
+                ws_path: document.getElementById('nodeWsPath').value || null,
+                grpc_service_name: document.getElementById('nodeGrpcService').value || null
+            };
+
+            try {
+                const response = await fetch('/api/admin/nodes', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(nodeData)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    closeNodeModal();
+                    loadNodes();
+                } else {
+                    alert('保存失败: ' + data.message);
+                }
+            } catch (error) {
+                alert('保存失败: ' + error.message);
+            }
+        }
+
+        // 删除节点
+        async function deleteNode(id) {
+            if (!confirm('确定要删除此节点吗？')) return;
+
+            try {
+                const response = await fetch(`/api/admin/nodes/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    loadNodes();
+                } else {
+                    alert('删除失败: ' + data.message);
+                }
+            } catch (error) {
+                alert('删除失败: ' + error.message);
+            }
+        }
+
+        // 加载待审批设备
+        async function loadPendingDevices() {
+            try {
+                const response = await fetch('/api/admin/pending-devices', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const container = document.getElementById('devicesTableContainer');
+
+                    if (data.devices.length === 0) {
+                        container.innerHTML = '<div class="empty-state">暂无待审批设备</div>';
+                        return;
+                    }
+
+                    let html = '<table class="table"><thead><tr><th>MAC地址</th><th>主机名</th><th>首次发现</th><th>操作</th></tr></thead><tbody>';
+
+                    data.devices.forEach(device => {
+                        html += `
+                            <tr>
+                                <td>${device.mac_address}</td>
+                                <td>${device.hostname || '-'}</td>
+                                <td>${new Date(device.first_seen).toLocaleString()}</td>
+                                <td>
+                                    <button class="btn btn-success btn-sm" onclick="approveDevice(${device.id})">批准</button>
+                                </td>
+                            </tr>
+                        `;
+                    });
+
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                }
+            } catch (error) {
+                console.error('加载设备失败:', error);
+            }
+        }
+
+        // 批准设备
+        async function approveDevice(id) {
+            if (!confirm('确定要批准此设备吗？')) return;
+
+            try {
+                const response = await fetch(`/api/admin/approve-device/${id}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`设备已批准\n用户名: ${data.user.name}\nIP: ${data.user.ip_address}`);
+                    loadPendingDevices();
+                    loadUsers();
+                } else {
+                    alert('批准失败: ' + data.message);
+                }
+            } catch (error) {
+                alert('批准失败: ' + error.message);
+            }
+        }
+
+        // 加载用户列表
+        async function loadUsers() {
+            try {
+                const response = await fetch('/api/admin/users', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    const container = document.getElementById('usersTableContainer');
+
+                    if (data.users.length === 0) {
+                        container.innerHTML = '<div class="empty-state">暂无用户</div>';
+                        return;
+                    }
+
+                    let html = '<table class="table"><thead><tr><th>用户名</th><th>IP地址</th><th>MAC地址</th><th>端口</th><th>状态</th></tr></thead><tbody>';
+
+                    data.users.forEach(user => {
+                        html += `
+                            <tr>
+                                <td>${user.name}</td>
+                                <td>${user.ip_address}</td>
+                                <td>${user.mac_address}</td>
+                                <td>${user.xray_port}</td>
+                                <td><span class="badge ${user.enabled ? 'badge-success' : 'badge-danger'}">${user.enabled ? '启用' : '禁用'}</span></td>
+                            </tr>
+                        `;
+                    });
+
+                    html += '</tbody></table>';
+                    container.innerHTML = html;
+                }
+            } catch (error) {
+                console.error('加载用户失败:', error);
+            }
+        }
+
+        // 全局重启
+        async function restartAll() {
+            if (!confirm('确定要重启所有用户的代理实例吗？\n所有连接将短暂中断。')) return;
+
+            try {
+                const response = await fetch('/api/admin/restart-all', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('所有代理实例已重启');
+                } else {
+                    alert('重启失败: ' + data.message);
+                }
+            } catch (error) {
+                alert('重启失败: ' + error.message);
+            }
+        }
+
+        // 初始化
+        if (token) {
+            showAdminPanel('admin');
+        }
+    </script>
+</body>
+</html>
