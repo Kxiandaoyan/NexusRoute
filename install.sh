@@ -1,12 +1,12 @@
 #!/bin/bash
 #
-# NexusRoute 一键安装脚本
-# 适用于 Ubuntu Server 22.04 LTS
+# NexusRoute One-Click Installation Script
+# For Ubuntu Server 22.04 LTS
 #
 
 set -e
 
-# 颜色输出
+# Color output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -29,128 +29,128 @@ log_step() {
     echo -e "${BLUE}[STEP $1/$2]${NC} $3"
 }
 
-# 检查 root 权限
+# Check root privileges
 if [ "$EUID" -ne 0 ]; then
-    log_error "请使用 root 权限运行此脚本"
+    log_error "Please run this script with root privileges"
     exit 1
 fi
 
 TOTAL_STEPS=10
 CURRENT_STEP=0
 
-# 步骤 1: 检查系统环境
+# Step 1: Check system environment
 next_step() {
     CURRENT_STEP=$((CURRENT_STEP + 1))
     log_step $CURRENT_STEP $TOTAL_STEPS "$1"
 }
 
-next_step "检查系统环境"
+next_step "Checking system environment"
 
-# 检查操作系统版本
+# Check OS version
 if [ ! -f /etc/os-release ]; then
-    log_error "无法检测操作系统版本"
+    log_error "Cannot detect OS version"
     exit 1
 fi
 
 source /etc/os-release
 if [ "$VERSION_CODENAME" != "jammy" ]; then
-    log_error "此脚本仅支持 Ubuntu 22.04 LTS (jammy)"
-    log_error "当前系统: $PRETTY_NAME"
+    log_error "This script only supports Ubuntu 22.04 LTS (jammy)"
+    log_error "Current system: $PRETTY_NAME"
     exit 1
 fi
 
-log_info "操作系统检查通过: $PRETTY_NAME"
+log_info "OS check passed: $PRETTY_NAME"
 
-# 检查网卡
+# Check network interfaces
 if ! ip link show eth0 &>/dev/null; then
-    log_error "未检测到 eth0 网卡"
-    log_error "请确保虚拟机已连接到 Nexus_WAN 交换机"
+    log_error "eth0 interface not detected"
+    log_error "Please ensure VM is connected to Nexus_WAN switch"
     exit 1
 fi
 
 if ! ip link show eth1 &>/dev/null; then
-    log_error "未检测到 eth1 网卡"
-    log_error "请确保虚拟机已连接到 Nexus_LAN_Isolated 交换机"
+    log_error "eth1 interface not detected"
+    log_error "Please ensure VM is connected to Nexus_LAN_Isolated switch"
     exit 1
 fi
 
-log_info "网卡检查通过: eth0, eth1"
+log_info "Network interface check passed: eth0, eth1"
 
-# 检查 eth0 网络连接
-log_info "检查 eth0 网络连接..."
+# Check eth0 internet connectivity
+log_info "Checking eth0 internet connectivity..."
 if ! ping -c 2 -W 5 8.8.8.8 &>/dev/null; then
-    log_error "eth0 无法访问互联网"
-    log_error "请检查 Nexus_WAN 交换机配置"
+    log_error "eth0 cannot access the internet"
+    log_error "Please check Nexus_WAN switch configuration"
     exit 1
 fi
 
-log_info "网络连接检查通过"
+log_info "Internet connectivity check passed"
 
-# 检查是否已安装
+# Check if already installed
 if [ -d "/opt/nexusroute" ]; then
-    log_warn "检测到已安装的 NexusRoute"
-    read -p "是否覆盖安装？这将删除所有现有数据 (y/N): " confirm
+    log_warn "Existing NexusRoute installation detected"
+    read -p "Overwrite installation? This will delete all existing data (y/N): " confirm
     if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
-        log_info "安装已取消"
+        log_info "Installation cancelled"
         exit 0
     fi
 
-    log_warn "停止现有服务..."
+    log_warn "Stopping existing services..."
     systemctl stop nexusroute 2>/dev/null || true
     systemctl stop xray-user* 2>/dev/null || true
 
-    log_warn "备份现有数据库..."
+    log_warn "Backing up existing database..."
     if [ -f "/opt/nexusroute/db.sqlite" ]; then
         cp /opt/nexusroute/db.sqlite /opt/nexusroute/db.sqlite.backup.$(date +%Y%m%d_%H%M%S)
-        log_info "数据库已备份"
+        log_info "Database backed up"
     fi
 fi
 
-# 步骤 2: 输入管理员密码
-next_step "设置管理员密码"
+# Step 2: Set admin password
+next_step "Setting admin password"
 
 while true; do
-    read -sp "请输入管理员密码（至少8位）: " password1
+    read -sp "Enter admin password (at least 8 characters): " password1
     echo
 
     if [ ${#password1} -lt 8 ]; then
-        log_error "密码长度至少8位，请重新输入"
+        log_error "Password must be at least 8 characters, please try again"
         continue
     fi
 
-    read -sp "请确认管理员密码: " password2
+    read -sp "Confirm admin password: " password2
     echo
 
     if [ "$password1" = "$password2" ]; then
         ADMIN_PASSWORD="$password1"
-        log_info "管理员密码设置成功"
+        log_info "Admin password set successfully"
         break
     else
-        log_error "两次密码不一致，请重新输入"
+        log_error "Passwords do not match, please try again"
     fi
 done
 
-# 步骤 3: 配置网络接口
-next_step "配置网络接口 eth1"
+# Step 3: Configure network interfaces
+next_step "Configuring eth1 network interface"
 
-log_info "配置 eth1 静态 IP: 192.168.100.1/24"
+log_info "Configuring eth1 static IP: 192.168.100.1/24"
 
-# 查找 netplan 配置文件
+# Find netplan configuration file
 NETPLAN_FILE=$(ls /etc/netplan/*.yaml 2>/dev/null | head -n 1)
 
 if [ -z "$NETPLAN_FILE" ]; then
     NETPLAN_FILE="/etc/netplan/01-netcfg.yaml"
 fi
 
-log_info "使用 netplan 配置文件: $NETPLAN_FILE"
+log_info "Using netplan configuration file: $NETPLAN_FILE"
 
-# 备份原配置
+# Backup original configuration
 if [ -f "$NETPLAN_FILE" ]; then
     cp "$NETPLAN_FILE" "${NETPLAN_FILE}.backup"
-    log_info "原配置已备份到 ${NETPLAN_FILE}.backup"
+    log_info "Original configuration backed up to ${NETPLAN_FILE}.backup"
 fi
 
-# 写入新配置
+# Write new configuration
 cat > "$NETPLAN_FILE" <<EOF
 network:
   version: 2
@@ -164,182 +164,182 @@ network:
         - 192.168.100.1/24
 EOF
 
-log_info "应用 netplan 配置..."
+log_info "Applying netplan configuration..."
 netplan apply
 
-# 等待网络配置生效
+# Wait for network configuration to take effect
 sleep 2
 
-# 验证配置
+# Verify configuration
 if ip addr show eth1 | grep -q "192.168.100.1/24"; then
-    log_info "eth1 配置成功"
+    log_info "eth1 configured successfully"
 else
-    log_error "eth1 配置失败"
+    log_error "eth1 configuration failed"
     exit 1
 fi
 
-# 步骤 4: 更新系统并安装基础依赖
-next_step "更新系统并安装基础依赖"
+# Step 4: Update system and install basic dependencies
+next_step "Updating system and installing basic dependencies"
 
-log_info "更新软件包列表..."
+log_info "Updating package list..."
 apt-get update -qq
 
-log_info "安装基础工具..."
+log_info "Installing basic tools..."
 apt-get install -y curl wget unzip sqlite3 jq iptables-persistent
 
-# 步骤 5: 安装 Node.js 18.x
-next_step "安装 Node.js 18.x"
+# Step 5: Install Node.js 18.x
+next_step "Installing Node.js 18.x"
 
 if command -v node &> /dev/null; then
     NODE_VERSION=$(node -v)
-    log_info "检测到已安装的 Node.js: $NODE_VERSION"
+    log_info "Detected existing Node.js: $NODE_VERSION"
 
     if [[ "$NODE_VERSION" =~ ^v18\. ]]; then
-        log_info "Node.js 版本符合要求，跳过安装"
+        log_info "Node.js version meets requirements, skipping installation"
     else
-        log_warn "Node.js 版本不符合要求，将重新安装"
+        log_warn "Node.js version does not meet requirements, reinstalling"
         apt-get remove -y nodejs 2>/dev/null || true
     fi
 fi
 
 if ! command -v node &> /dev/null || ! [[ "$(node -v)" =~ ^v18\. ]]; then
-    log_info "下载 NodeSource 安装脚本..."
+    log_info "Downloading NodeSource installation script..."
     curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
 
-    log_info "安装 Node.js..."
+    log_info "Installing Node.js..."
     apt-get install -y nodejs
 fi
 
 NODE_VERSION=$(node -v)
 NPM_VERSION=$(npm -v)
-log_info "Node.js 安装成功: $NODE_VERSION"
-log_info "npm 版本: $NPM_VERSION"
+log_info "Node.js installed successfully: $NODE_VERSION"
+log_info "npm version: $NPM_VERSION"
 
-# 步骤 6: 安装 Xray-core
-next_step "安装 Xray-core"
+# Step 6: Install Xray-core
+next_step "Installing Xray-core"
 
 if [ -f "/usr/local/bin/xray" ]; then
     XRAY_VERSION=$(/usr/local/bin/xray version | head -n 1)
-    log_info "检测到已安装的 Xray: $XRAY_VERSION"
-    read -p "是否重新安装 Xray？(y/N): " reinstall_xray
+    log_info "Detected existing Xray: $XRAY_VERSION"
+    read -p "Reinstall Xray? (y/N): " reinstall_xray
 
     if [ "$reinstall_xray" != "y" ] && [ "$reinstall_xray" != "Y" ]; then
-        log_info "跳过 Xray 安装"
+        log_info "Skipping Xray installation"
     else
         rm -f /usr/local/bin/xray
     fi
 fi
 
 if [ ! -f "/usr/local/bin/xray" ]; then
-    log_info "下载 Xray-core 最新版..."
+    log_info "Downloading latest Xray-core..."
     wget -q --show-progress -O /tmp/xray.zip \
         https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
 
-    log_info "解压 Xray..."
+    log_info "Extracting Xray..."
     unzip -q -o /tmp/xray.zip -d /tmp/xray
 
-    log_info "安装 Xray 到 /usr/local/bin..."
+    log_info "Installing Xray to /usr/local/bin..."
     mv /tmp/xray/xray /usr/local/bin/xray
     chmod +x /usr/local/bin/xray
 
-    log_info "设置网络权限..."
+    log_info "Setting network capabilities..."
     setcap cap_net_admin,cap_net_bind_service=ep /usr/local/bin/xray
 
-    # 创建配置目录
+    # Create configuration directory
     mkdir -p /usr/local/etc/xray
 
-    # 清理临时文件
+    # Clean up temporary files
     rm -rf /tmp/xray /tmp/xray.zip
 
     XRAY_VERSION=$(/usr/local/bin/xray version | head -n 1)
-    log_info "Xray 安装成功: $XRAY_VERSION"
+    log_info "Xray installed successfully: $XRAY_VERSION"
 fi
 
-# 步骤 7: 安装并配置 dnsmasq
-next_step "配置 dnsmasq"
+# Step 7: Install and configure dnsmasq
+next_step "Configuring dnsmasq"
 
-log_info "安装 dnsmasq..."
+log_info "Installing dnsmasq..."
 apt-get install -y dnsmasq
 
-log_info "停止 dnsmasq 服务..."
+log_info "Stopping dnsmasq service..."
 systemctl stop dnsmasq
 
-log_info "配置 dnsmasq..."
+log_info "Configuring dnsmasq..."
 cat > /etc/dnsmasq.conf <<EOF
-# NexusRoute dnsmasq 配置
+# NexusRoute dnsmasq configuration
 
-# 监听端口和接口
+# Listen port and interface
 port=53
 interface=eth1
 bind-interfaces
 
-# 禁用系统 hosts 和 resolv.conf
+# Disable system hosts and resolv.conf
 no-resolv
 no-hosts
 
-# DNS 转发到 Xray
+# DNS forwarding to Xray
 server=127.0.0.1#5353
 
-# DHCP 配置
+# DHCP configuration
 dhcp-range=192.168.100.50,192.168.100.99,12h
 dhcp-option=3,192.168.100.1
 dhcp-option=6,192.168.100.1
 
-# DHCP 日志
+# DHCP logging
 log-dhcp
 
-# 静态绑定配置文件（由程序动态生成）
+# Static binding configuration directory (dynamically generated by program)
 conf-dir=/etc/dnsmasq.d
 EOF
 
-# 创建静态绑定目录
+# Create static binding directory
 mkdir -p /etc/dnsmasq.d
 
-log_info "dnsmasq 配置完成"
+log_info "dnsmasq configuration completed"
 
-# 步骤 8: 部署 NexusRoute 应用
-next_step "部署 NexusRoute 应用"
+# Step 8: Deploy NexusRoute application
+next_step "Deploying NexusRoute application"
 
-log_info "创建应用目录..."
+log_info "Creating application directory..."
 mkdir -p /opt/nexusroute/public
 
-log_info "复制应用文件..."
-# 注意：这里假设脚本与应用文件在同一目录
+log_info "Copying application files..."
+# Note: Assumes script and application files are in the same directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ -f "$SCRIPT_DIR/server.js" ]; then
     cp "$SCRIPT_DIR/server.js" /opt/nexusroute/
-    log_info "server.js 已复制"
+    log_info "server.js copied"
 else
-    log_warn "未找到 server.js，需要手动部署"
+    log_warn "server.js not found, manual deployment required"
 fi
 
 if [ -f "$SCRIPT_DIR/package.json" ]; then
     cp "$SCRIPT_DIR/package.json" /opt/nexusroute/
-    log_info "package.json 已复制"
+    log_info "package.json copied"
 fi
 
 if [ -d "$SCRIPT_DIR/public" ]; then
     cp -r "$SCRIPT_DIR/public/"* /opt/nexusroute/public/
-    log_info "前端文件已复制"
+    log_info "Frontend files copied"
 else
-    log_warn "未找到 public 目录，需要手动部署"
+    log_warn "public directory not found, manual deployment required"
 fi
 
-# 安装 Node.js 依赖
+# Install Node.js dependencies
 if [ -f "/opt/nexusroute/package.json" ]; then
-    log_info "安装 Node.js 依赖..."
+    log_info "Installing Node.js dependencies..."
     cd /opt/nexusroute
     npm install --production
     cd -
 fi
 
-# 步骤 9: 初始化数据库
-next_step "初始化数据库"
+# Step 9: Initialize database
+next_step "Initializing database"
 
-log_info "创建数据库..."
+log_info "Creating database..."
 
-# 生成密码哈希（使用 Node.js）
+# Generate password hash (using Node.js)
 ADMIN_PASSWORD_HASH=$(node -e "
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
@@ -348,13 +348,13 @@ console.log(hash);
 " 2>/dev/null || echo "")
 
 if [ -z "$ADMIN_PASSWORD_HASH" ]; then
-    log_warn "bcryptjs 未安装，使用简单哈希（不推荐用于生产环境）"
+    log_warn "bcryptjs not installed, using simple hash (not recommended for production)"
     ADMIN_PASSWORD_HASH=$(echo -n "$ADMIN_PASSWORD" | sha256sum | cut -d' ' -f1)
 fi
 
-# 创建数据库表
+# Create database tables
 sqlite3 /opt/nexusroute/db.sqlite <<EOF
--- 用户表
+-- Users table
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT UNIQUE NOT NULL,
@@ -366,7 +366,7 @@ CREATE TABLE IF NOT EXISTS users (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 节点表
+-- Nodes table
 CREATE TABLE IF NOT EXISTS nodes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
@@ -392,7 +392,7 @@ CREATE TABLE IF NOT EXISTS nodes (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 用户路由配置表
+-- User routes table
 CREATE TABLE IF NOT EXISTS user_routes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -406,7 +406,7 @@ CREATE TABLE IF NOT EXISTS user_routes (
   FOREIGN KEY (node3_id) REFERENCES nodes(id)
 );
 
--- 待审批设备表
+-- Pending devices table
 CREATE TABLE IF NOT EXISTS pending_devices (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   mac_address TEXT UNIQUE NOT NULL,
@@ -416,7 +416,7 @@ CREATE TABLE IF NOT EXISTS pending_devices (
   status TEXT DEFAULT 'pending'
 );
 
--- 管理员表
+-- Admins table
 CREATE TABLE IF NOT EXISTS admins (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT UNIQUE NOT NULL,
@@ -424,17 +424,17 @@ CREATE TABLE IF NOT EXISTS admins (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- 插入默认管理员账户
+-- Insert default admin account
 INSERT OR REPLACE INTO admins (id, username, password_hash)
 VALUES (1, 'admin', '$ADMIN_PASSWORD_HASH');
 EOF
 
-log_info "数据库初始化完成"
+log_info "Database initialization completed"
 
-# 步骤 10: 配置 systemd 服务
-next_step "配置 systemd 服务"
+# Step 10: Configure systemd services
+next_step "Configuring systemd services"
 
-log_info "创建 NexusRoute 服务..."
+log_info "Creating NexusRoute service..."
 cat > /etc/systemd/system/nexusroute.service <<EOF
 [Unit]
 Description=NexusRoute Multi-User Proxy Gateway
@@ -452,76 +452,76 @@ RestartSec=10
 WantedBy=multi-user.target
 EOF
 
-log_info "重载 systemd 配置..."
+log_info "Reloading systemd configuration..."
 systemctl daemon-reload
 
-log_info "启用服务..."
+log_info "Enabling services..."
 systemctl enable nexusroute
 systemctl enable dnsmasq
 
-log_info "启动服务..."
+log_info "Starting services..."
 systemctl start dnsmasq
 systemctl start nexusroute
 
-# 等待服务启动
+# Wait for services to start
 sleep 3
 
-# 检查服务状态
+# Check service status
 if systemctl is-active --quiet nexusroute; then
-    log_info "NexusRoute 服务启动成功"
+    log_info "NexusRoute service started successfully"
 else
-    log_error "NexusRoute 服务启动失败"
-    log_error "请查看日志: journalctl -u nexusroute -n 50"
+    log_error "NexusRoute service failed to start"
+    log_error "Check logs: journalctl -u nexusroute -n 50"
     exit 1
 fi
 
 if systemctl is-active --quiet dnsmasq; then
-    log_info "dnsmasq 服务启动成功"
+    log_info "dnsmasq service started successfully"
 else
-    log_error "dnsmasq 服务启动失败"
-    log_error "请查看日志: journalctl -u dnsmasq -n 50"
+    log_error "dnsmasq service failed to start"
+    log_error "Check logs: journalctl -u dnsmasq -n 50"
     exit 1
 fi
 
-# 配置 iptables 规则
-log_info "配置 iptables 规则..."
+# Configure iptables rules
+log_info "Configuring iptables rules..."
 if [ -f "$SCRIPT_DIR/iptables_rules.sh" ]; then
     cp "$SCRIPT_DIR/iptables_rules.sh" /opt/nexusroute/
     chmod +x /opt/nexusroute/iptables_rules.sh
     /opt/nexusroute/iptables_rules.sh setup
 else
-    log_warn "未找到 iptables_rules.sh，需要手动配置防火墙规则"
+    log_warn "iptables_rules.sh not found, manual firewall configuration required"
 fi
 
-# 安装完成
+# Installation complete
 echo ""
 echo "=========================================="
-echo -e "${GREEN}NexusRoute 安装完成！${NC}"
+echo -e "${GREEN}NexusRoute Installation Complete!${NC}"
 echo "=========================================="
 echo ""
-echo "访问地址："
-echo "  - 用户前台: http://192.168.100.1/"
-echo "  - 管理后台: http://192.168.100.1/admin"
+echo "Access URLs:"
+echo "  - User Frontend: http://192.168.100.1/"
+echo "  - Admin Backend: http://192.168.100.1/admin"
 echo ""
-echo "管理员账户："
-echo "  - 用户名: admin"
-echo "  - 密码: (您刚才设置的密码)"
+echo "Admin Account:"
+echo "  - Username: admin"
+echo "  - Password: (the password you just set)"
 echo ""
-echo "下一步操作："
-echo "  1. 访问管理后台添加代理节点"
-echo "  2. 连接 Windows 虚拟机到 Nexus_LAN_Isolated 交换机"
-echo "  3. Windows 虚拟机将自动获取 IP 并显示在待审批列表"
-echo "  4. 在管理后台批准设备后，即可开始使用"
+echo "Next Steps:"
+echo "  1. Access admin backend to add proxy nodes"
+echo "  2. Connect Windows VM to Nexus_LAN_Isolated switch"
+echo "  3. Windows VM will auto-acquire IP and appear in pending devices list"
+echo "  4. Approve device in admin backend to start using"
 echo ""
-echo "防漏油测试："
-echo "  在 Ubuntu 执行: systemctl stop xray-user1"
-echo "  在 Windows 虚拟机测试: ping 8.8.8.8 (应该超时)"
+echo "Kill Switch Test:"
+echo "  On Ubuntu: systemctl stop xray-user1"
+echo "  On Windows VM: ping 8.8.8.8 (should timeout)"
 echo ""
-echo "查看服务状态："
+echo "Check Service Status:"
 echo "  systemctl status nexusroute"
 echo "  systemctl status dnsmasq"
 echo ""
-echo "查看日志："
+echo "View Logs:"
 echo "  journalctl -u nexusroute -f"
 echo "  journalctl -u dnsmasq -f"
 echo ""
