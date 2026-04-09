@@ -715,7 +715,7 @@ app.get('/api/user/nodes', (req, res) => {
 
 // ==================== 启动服务 ====================
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '192.168.100.1', () => {
     console.log(`NexusRoute 服务已启动，监听端口 ${PORT}`);
     console.log(`用户前台: http://192.168.100.1/`);
     console.log(`管理后台: http://192.168.100.1/admin`);
