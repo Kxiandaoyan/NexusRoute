@@ -174,8 +174,13 @@ fi
 # Step 4: Update system and install basic dependencies
 next_step "Updating system and installing basic dependencies"
 
-log_info "Updating package list..."
-apt-get update -qq
+log_info "Updating package list (this may take a few minutes)..."
+# Remove -qq to show progress, add timeout
+apt-get update -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 || {
+    log_warn "apt-get update failed, retrying..."
+    sleep 5
+    apt-get update -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30
+}
 
 log_info "Installing basic tools..."
 apt-get install -y curl wget unzip sqlite3 jq iptables-persistent
