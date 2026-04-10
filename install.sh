@@ -228,9 +228,13 @@ mkdir -p /etc/dnsmasq.d
 log_info "dnsmasq configured (DHCP range $DHCP_START-$DHCP_END, permanent lease)"
 
 # System DNS - dnsmasq handles LAN devices only, Ubuntu uses public DNS directly
-# Installing dnsmasq may stop systemd-resolved, breaking Ubuntu's own DNS
+# Must fully kill systemd-resolved so it can't reclaim port 53
 systemctl stop systemd-resolved 2>/dev/null || true
 systemctl disable systemd-resolved 2>/dev/null || true
+systemctl mask systemd-resolved 2>/dev/null || true
+# Kill anything still on port 53
+fuser -k 53/tcp 53/udp 2>/dev/null || true
+sleep 1
 rm -f /etc/resolv.conf
 cat > /etc/resolv.conf <<DNS
 nameserver 8.8.8.8
@@ -360,8 +364,17 @@ EOF
 systemctl daemon-reload
 systemctl enable dnsmasq nexusroute
 
+# Ensure port 53 is free before starting dnsmasq
+fuser -k 53/tcp 53/udp 2>/dev/null || true
+sleep 1
+
 log_info "Starting dnsmasq..."
-systemctl start dnsmasq
+if ! systemctl start dnsmasq; then
+    log_error "dnsmasq failed to start, checking port 53..."
+    ss -tlnp | grep ':53 ' || true
+    log_error "Check: journalctl -u dnsmasq -n 20"
+    exit 1
+fi
 sleep 1
 
 log_info "Starting NexusRoute..."

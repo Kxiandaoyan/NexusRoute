@@ -177,7 +177,7 @@ add_user_rules() {
     # UDP → TPROXY 代理（排除 DHCP 端口 67/68，DHCP 是本机协议不需要代理）
     iptables -t mangle -A PREROUTING -i $LAN_IF \
         -p udp -m mark --mark 0x${MARK} \
-        ! --dport 67 ! --dport 68 \
+        -m multiport ! --dports 67,68 \
         -m comment --comment "user${USER_ID}: TPROXY UDP" \
         -j TPROXY --on-port ${XRAY_PORT} --tproxy-mark 0x${MARK}
 
