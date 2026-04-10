@@ -234,6 +234,7 @@ rm -f /etc/dnsmasq.d/* 2>/dev/null || true
 mkdir -p /etc/systemd/system/dnsmasq.service.d
 cat > /etc/systemd/system/dnsmasq.service.d/override.conf << 'DNOV'
 [Service]
+ExecStartPre=
 ExecStart=
 ExecStart=/usr/sbin/dnsmasq -x /run/dnsmasq/dnsmasq.pid -u dnsmasq --conf-file=/etc/dnsmasq.conf
 DNOV
