@@ -220,7 +220,7 @@
         </div>
 
         <div id="unauthorizedAlert" class="alert alert-warning hidden">
-            设备未授权，请等待管理员批准后使用
+            设备正在自动配置中，请稍候...
         </div>
 
         <div class="status-card">
@@ -330,9 +330,9 @@
                     const unauthorizedAlert = document.getElementById('unauthorizedAlert');
                     const configForm = document.getElementById('configForm');
 
-                    if (data.status === 'unauthorized') {
-                        statusIndicator.className = 'status-indicator status-offline';
-                        statusText.textContent = '未授权';
+                    if (data.status === 'unauthorized' || data.status === 'configuring') {
+                        statusIndicator.className = 'status-indicator status-configuring';
+                        statusText.textContent = data.status === 'configuring' ? '配置中' : '未识别';
                         exitIP.textContent = '-';
                         unauthorizedAlert.classList.remove('hidden');
                         configForm.style.display = 'none';

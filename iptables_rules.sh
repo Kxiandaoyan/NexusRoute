@@ -1,102 +1,141 @@
 #!/bin/bash
 #
-# NexusRoute - iptables TPROXY 规则脚本
-# 功能：为每个用户创建独立的透明代理规则，实现 MAC-IP 双重绑定和防漏油机制
+# NexusRoute - iptables TPROXY rules
+# Per-user transparent proxy with MAC-IP binding and Kill Switch
+#
+# Architecture - Two Layers:
+#
+#   Layer 1: Ubuntu Kernel (iptables/netfilter)
+#     - FORWARD DROP:          LAN 设备无法直连外网
+#     - IPv6 disabled:         防止 IPv6 绕过
+#     - Anti-spoofing:         MAC-IP 绑定，防冒用
+#
+#   Layer 2: Proxy Program (per-user mangle rules)
+#     - TPROXY TCP/UDP:        合法流量送入 Xray 代理
+#     - DROP ICMP:             禁止 ping（防泄露真实 IP）
+#     - DROP other protocols:  禁止 GRE/SCTP/ESP 等
+#     - Xray crash = 断网:     TPROXY 无 socket 时内核自动丢包
+#
+# Usage:
+#   setup                                    - Build all rules from database
+#   clear                                    - Remove all rules
+#   show                                     - Display current rules
+#   add-user <id> <ip> <mac> <port> <mark>   - Add single user rules
 #
 
 set -e
 
-# 颜色输出
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
+log_info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
+log_warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
+log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# 检查 root 权限
+# Root check
 if [ "$EUID" -ne 0 ]; then
-    log_error "请使用 root 权限运行此脚本"
+    log_error "Please run as root"
     exit 1
 fi
 
-# 清空现有规则
+# Read config (written by install.sh)
+CONFIG_FILE="/opt/nexusroute/config.json"
+LAN_IF="eth1"
+WAN_IF="eth0"
+LAN_IP="192.168.100.1"
+
+if [ -f "$CONFIG_FILE" ]; then
+    LAN_IF=$(grep -o '"lan_if"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/.*: *"//;s/".*//')
+    WAN_IF=$(grep -o '"wan_if"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/.*: *"//;s/".*//')
+    LAN_IP=$(grep -o '"lan_ip"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" | head -1 | sed 's/.*: *"//;s/".*//')
+fi
+
+LAN_IF=${LAN_IF:-eth1}
+WAN_IF=${WAN_IF:-eth0}
+LAN_IP=${LAN_IP:-192.168.100.1}
+
+log_info "Interfaces: LAN=$LAN_IF  WAN=$WAN_IF  Gateway=$LAN_IP"
+
+# ==================== Rules ====================
+
 clear_rules() {
-    log_info "清空现有 iptables 规则..."
+    log_info "Clearing existing iptables rules..."
 
-    # 清空 mangle 表
-    iptables -t mangle -F
-    iptables -t mangle -X
+    # Flush all IPv4 chains
+    iptables -F 2>/dev/null || true
+    iptables -X 2>/dev/null || true
+    iptables -t mangle -F 2>/dev/null || true
+    iptables -t mangle -X 2>/dev/null || true
+    iptables -t nat -F 2>/dev/null || true
+    iptables -t nat -X 2>/dev/null || true
 
-    # 清空 filter 表
-    iptables -F
-    iptables -X
+    # Flush all IPv6 chains
+    ip6tables -F 2>/dev/null || true
+    ip6tables -X 2>/dev/null || true
 
-    # 清空路由规则（保留默认规则）
-    ip rule del fwmark 0x1 table 100 2>/dev/null || true
-    ip rule del fwmark 0x2 table 101 2>/dev/null || true
-    ip rule del fwmark 0x3 table 102 2>/dev/null || true
-    ip rule del fwmark 0x4 table 103 2>/dev/null || true
-    ip rule del fwmark 0x5 table 104 2>/dev/null || true
+    # Reset default policies
+    iptables -P INPUT ACCEPT
+    iptables -P FORWARD ACCEPT
+    iptables -P OUTPUT ACCEPT
+    ip6tables -P INPUT ACCEPT
+    ip6tables -P FORWARD ACCEPT
+    ip6tables -P OUTPUT ACCEPT
 
-    # 清空路由表
-    ip route flush table 100 2>/dev/null || true
-    ip route flush table 101 2>/dev/null || true
-    ip route flush table 102 2>/dev/null || true
-    ip route flush table 103 2>/dev/null || true
-    ip route flush table 104 2>/dev/null || true
+    # Clean up policy routing
+    ip rule show | grep "fwmark" | while read -r line; do
+        prio=$(echo "$line" | awk '{print $1}' | tr -d ':')
+        ip rule del prio "$prio" 2>/dev/null || true
+    done
 
-    log_info "规则清空完成"
+    for i in $(seq 100 399); do
+        ip route flush table $i 2>/dev/null || true
+    done
+
+    # Re-enable IPv6
+    sysctl -w net.ipv6.conf.$LAN_IF.disable_ipv6=0 2>/dev/null || true
+
+    log_info "Rules cleared"
 }
 
-# 设置基础规则
 setup_base_rules() {
-    log_info "设置基础防火墙规则..."
+    log_info "Setting base firewall rules..."
 
-    # 设置默认策略（Kill Switch 核心）
+    # ==================== Default Policies ====================
+    # INPUT/OUTPUT ACCEPT: Ubuntu 自身正常使用（apt/curl/代理出站等全走WAN）
+    # FORWARD DROP: Kill Switch 核心，LAN 设备不能直连外网
     iptables -P INPUT ACCEPT
     iptables -P OUTPUT ACCEPT
-    iptables -P FORWARD DROP  # 关键：默认拒绝转发，防止漏油
+    iptables -P FORWARD DROP
 
-    # 允许本地回环
-    iptables -A INPUT -i lo -j ACCEPT
-    iptables -A OUTPUT -o lo -j ACCEPT
+    # ==================== FORWARD Chain (Kill Switch) ====================
+    # 防线1: 显式阻断 LAN 的 ICMP 转发（防 ping 泄露真实 IP）
+    iptables -A FORWARD -i $LAN_IF -p icmp -m comment --comment "Kill Switch: Block ICMP" -j DROP
 
-    # 允许已建立的连接
-    iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
-    iptables -A OUTPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+    # 防线2: 显式阻断 LAN 的非 TCP/UDP 协议转发（GRE/SCTP/ESP 等）
+    iptables -A FORWARD -i $LAN_IF ! -p tcp ! -p udp -m comment --comment "Kill Switch: Block non-TCP/UDP" -j DROP
 
-    # 允许 eth1 的 DHCP 和 DNS 请求（到网关本身）
-    iptables -A INPUT -i eth1 -p udp --dport 67 -j ACCEPT  # DHCP
-    iptables -A INPUT -i eth1 -p udp --dport 53 -j ACCEPT  # DNS
-    iptables -A INPUT -i eth1 -p tcp --dport 53 -j ACCEPT  # DNS over TCP
+    # 其余所有 LAN 转发被默认 DROP 策略阻断（TCP/UDP 也无法直连）
 
-    # 允许 eth1 的 HTTP 访问（Web 面板）
-    iptables -A INPUT -i eth1 -p tcp --dport 80 -j ACCEPT
+    # ==================== IPv6 Kill Switch ====================
+    # 防线4: 彻底禁用 LAN 接口的 IPv6，防止设备通过 IPv6 绕过代理
+    sysctl -w net.ipv6.conf.$LAN_IF.disable_ipv6=1 2>/dev/null || true
+    sysctl -w net.ipv6.conf.$LAN_IF.forwarding=0 2>/dev/null || true
 
-    # 允许 SSH（可选，根据需要调整）
-    iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+    # 兜底: 即使 IPv6 没被完全禁用，ip6tables 也阻断所有转发
+    ip6tables -P INPUT DROP 2>/dev/null || true
+    ip6tables -P FORWARD DROP 2>/dev/null || true
+    ip6tables -P OUTPUT DROP 2>/dev/null || true
+    ip6tables -F 2>/dev/null || true
+    # 只允许本机 lo 回环（sysctl 等本机内部通信需要）
+    ip6tables -A INPUT -i lo -j ACCEPT 2>/dev/null || true
+    ip6tables -A OUTPUT -o lo -j ACCEPT 2>/dev/null || true
 
-    # 明确阻止 eth1 的 ICMP 转发（Kill Switch - 双重保险）
-    iptables -A FORWARD -i eth1 -p icmp -j DROP -m comment --comment "Kill Switch: Block ICMP forwarding"
-
-    # 明确阻止 eth1 的其他协议转发（Kill Switch - 只允许 TCP/UDP）
-    iptables -A FORWARD -i eth1 ! -p tcp ! -p udp -j DROP -m comment --comment "Kill Switch: Block non-TCP/UDP forwarding"
-
-    log_info "基础规则设置完成（含 Kill Switch 保护）"
+    log_info "Base rules set (Kill Switch active: FORWARD DROP + IPv6 disabled)"
 }
 
-# 为单个用户添加规则
 add_user_rules() {
     local USER_ID=$1
     local USER_IP=$2
@@ -105,168 +144,144 @@ add_user_rules() {
     local MARK=$5
     local TABLE_ID=$((100 + USER_ID - 1))
 
-    log_info "添加用户规则: user${USER_ID} (${USER_IP}, ${USER_MAC})"
+    log_info "Adding rules: user${USER_ID} (${USER_IP}, mark=0x${MARK})"
 
-    # 1. 创建路由表
-    if ! ip route show table ${TABLE_ID} | grep -q "local 0.0.0.0/0"; then
+    # ==================== Policy Routing ====================
+    if ! ip route show table ${TABLE_ID} 2>/dev/null | grep -q "local 0.0.0.0/0"; then
         ip rule add fwmark 0x${MARK} table ${TABLE_ID}
         ip route add local 0.0.0.0/0 dev lo table ${TABLE_ID}
     fi
 
-    # 2. 防止 IP 欺骗：如果 IP 和 MAC 不匹配，直接 DROP
-    iptables -t mangle -A PREROUTING -i eth1 \
+    # ==================== PREROUTING mangle (per-user) ====================
+
+    # 防线5: 反IP欺骗 - 冒用此 IP 但 MAC 不匹配则 DROP
+    iptables -t mangle -A PREROUTING -i $LAN_IF \
         -s ${USER_IP} \
         -m mac ! --mac-source ${USER_MAC} \
-        -j DROP \
-        -m comment --comment "user${USER_ID}: Anti-spoofing"
+        -m comment --comment "user${USER_ID}: Anti-spoofing" \
+        -j DROP
 
-    # 3. 为匹配的流量打标记
-    iptables -t mangle -A PREROUTING -i eth1 \
+    # 标记合法流量（TCP + UDP + ICMP + 所有其他协议都会被标记）
+    iptables -t mangle -A PREROUTING -i $LAN_IF \
         -s ${USER_IP} \
         -m mac --mac-source ${USER_MAC} \
-        -j MARK --set-mark 0x${MARK} \
-        -m comment --comment "user${USER_ID}: Mark traffic"
+        -m comment --comment "user${USER_ID}: Mark" \
+        -j MARK --set-mark 0x${MARK}
 
-    # 4. TPROXY 劫持 TCP 流量
-    iptables -t mangle -A PREROUTING -i eth1 \
-        -p tcp \
-        -m mark --mark 0x${MARK} \
-        -j TPROXY --on-port ${XRAY_PORT} --tproxy-mark 0x${MARK} \
-        -m comment --comment "user${USER_ID}: TPROXY TCP"
+    # TCP → TPROXY 代理
+    iptables -t mangle -A PREROUTING -i $LAN_IF \
+        -p tcp -m mark --mark 0x${MARK} \
+        -m comment --comment "user${USER_ID}: TPROXY TCP" \
+        -j TPROXY --on-port ${XRAY_PORT} --tproxy-mark 0x${MARK}
 
-    # 5. TPROXY 劫持 UDP 流量
-    iptables -t mangle -A PREROUTING -i eth1 \
-        -p udp \
-        -m mark --mark 0x${MARK} \
-        ! --dport 67 \
-        ! --dport 68 \
-        -j TPROXY --on-port ${XRAY_PORT} --tproxy-mark 0x${MARK} \
-        -m comment --comment "user${USER_ID}: TPROXY UDP"
+    # UDP → TPROXY 代理（排除 DHCP 端口 67/68，DHCP 是本机协议不需要代理）
+    iptables -t mangle -A PREROUTING -i $LAN_IF \
+        -p udp -m mark --mark 0x${MARK} \
+        ! --dport 67 ! --dport 68 \
+        -m comment --comment "user${USER_ID}: TPROXY UDP" \
+        -j TPROXY --on-port ${XRAY_PORT} --tproxy-mark 0x${MARK}
 
-    # 6. 明确阻止 ICMP 流量（Kill Switch - 防止 IP 泄露）
-    iptables -t mangle -A PREROUTING -i eth1 \
-        -s ${USER_IP} \
-        -p icmp \
-        -j DROP \
-        -m comment --comment "user${USER_ID}: Block ICMP (Kill Switch)"
+    # 防线3: 阻断 ICMP（防止通过 ping 泄露真实 IP）
+    iptables -t mangle -A PREROUTING -i $LAN_IF \
+        -s ${USER_IP} -p icmp \
+        -m comment --comment "user${USER_ID}: Block ICMP" \
+        -j DROP
 
-    # 7. 明确阻止其他协议（Kill Switch - 只允许 TCP/UDP）
-    iptables -t mangle -A PREROUTING -i eth1 \
-        -s ${USER_IP} \
-        ! -p tcp \
-        ! -p udp \
-        ! -p icmp \
-        -j DROP \
-        -m comment --comment "user${USER_ID}: Block other protocols (Kill Switch)"
+    # 防线3: 阻断其他协议（GRE/SCTP/ESP 等，只允许 TCP/UDP 走代理）
+    iptables -t mangle -A PREROUTING -i $LAN_IF \
+        -s ${USER_IP} ! -p tcp ! -p udp ! -p icmp \
+        -m comment --comment "user${USER_ID}: Block other protocols" \
+        -j DROP
 
-    log_info "用户 user${USER_ID} 规则添加完成（含 Kill Switch 保护）"
+    log_info "user${USER_ID} rules added"
 }
 
-# 从数据库读取用户信息并添加规则
 setup_user_rules() {
-    log_info "从数据库读取用户信息..."
+    log_info "Loading users from database..."
 
     local DB_PATH="/opt/nexusroute/db.sqlite"
-
     if [ ! -f "$DB_PATH" ]; then
-        log_warn "数据库文件不存在，跳过用户规则设置"
+        log_warn "Database not found, skipping user rules"
         return
     fi
 
-    # 读取所有启用的用户
-    local USERS=$(sqlite3 "$DB_PATH" "SELECT id, ip_address, mac_address, xray_port, iptables_mark FROM users WHERE enabled = 1;")
-
+    local USERS=$(sqlite3 "$DB_PATH" "SELECT id, ip_address, mac_address, xray_port, iptables_mark FROM users WHERE enabled = 1;" 2>/dev/null)
     if [ -z "$USERS" ]; then
-        log_warn "未找到启用的用户"
+        log_warn "No enabled users found"
         return
     fi
 
-    # 逐行处理
     while IFS='|' read -r USER_ID USER_IP USER_MAC XRAY_PORT MARK; do
         add_user_rules "$USER_ID" "$USER_IP" "$USER_MAC" "$XRAY_PORT" "$MARK"
     done <<< "$USERS"
 
-    log_info "所有用户规则设置完成"
+    log_info "All user rules loaded"
 }
 
-# 保存规则
 save_rules() {
-    log_info "保存 iptables 规则..."
-
-    # 保存到 iptables-persistent
-    if command -v netfilter-persistent &> /dev/null; then
-        netfilter-persistent save
-        log_info "规则已保存到 /etc/iptables/rules.v4"
-    elif command -v iptables-save &> /dev/null; then
-        iptables-save > /etc/iptables/rules.v4
-        log_info "规则已保存到 /etc/iptables/rules.v4"
-    else
-        log_warn "未找到 iptables-save 命令，规则未持久化"
+    if command -v netfilter-persistent &>/dev/null; then
+        netfilter-persistent save 2>/dev/null && log_info "Rules saved (netfilter-persistent)"
+    elif command -v iptables-save &>/dev/null; then
+        mkdir -p /etc/iptables
+        iptables-save > /etc/iptables/rules.v4 2>/dev/null && log_info "Rules saved to /etc/iptables/rules.v4"
+        ip6tables-save > /etc/iptables/rules.v6 2>/dev/null || true
     fi
 }
 
-# 显示当前规则
 show_rules() {
-    log_info "当前 iptables 规则："
     echo ""
-    echo "=== Mangle 表 PREROUTING 链 ==="
-    iptables -t mangle -L PREROUTING -n -v --line-numbers
+    echo "=== IPv4 FORWARD (policy DROP - Kill Switch) ==="
+    iptables -L FORWARD -n -v --line-numbers 2>/dev/null
     echo ""
-    echo "=== Filter 表 FORWARD 链 ==="
-    iptables -L FORWARD -n -v --line-numbers
+    echo "=== IPv4 Mangle PREROUTING (LAN=$LAN_IF) ==="
+    iptables -t mangle -L PREROUTING -n -v --line-numbers 2>/dev/null
     echo ""
-    echo "=== 路由规则 ==="
-    ip rule show
+    echo "=== IPv6 (should be locked down) ==="
+    ip6tables -L -n -v 2>/dev/null || echo "(ip6tables not available)"
     echo ""
-    echo "=== 路由表 ==="
-    for i in {100..104}; do
-        if ip route show table $i 2>/dev/null | grep -q .; then
-            echo "Table $i:"
-            ip route show table $i
-        fi
-    done
+    echo "=== IPv6 on $LAN_IF ==="
+    sysctl net.ipv6.conf.$LAN_IF.disable_ipv6 2>/dev/null || echo "(not available)"
+    echo ""
+    echo "=== Policy Routing ==="
+    ip rule show | grep fwmark || echo "(none)"
 }
 
-# 主函数
-main() {
-    case "${1:-setup}" in
-        setup)
-            log_info "开始设置 iptables 规则..."
-            clear_rules
-            setup_base_rules
-            setup_user_rules
-            save_rules
-            log_info "iptables 规则设置完成！"
-            echo ""
-            show_rules
-            ;;
-        clear)
-            clear_rules
-            save_rules
-            log_info "iptables 规则已清空"
-            ;;
-        show)
-            show_rules
-            ;;
-        add-user)
-            if [ $# -ne 5 ]; then
-                log_error "用法: $0 add-user <user_id> <ip> <mac> <port>"
-                exit 1
-            fi
-            add_user_rules "$2" "$3" "$4" "$5" "$2"
-            save_rules
-            ;;
-        *)
-            echo "用法: $0 {setup|clear|show|add-user}"
-            echo ""
-            echo "  setup      - 设置所有规则（从数据库读取）"
-            echo "  clear      - 清空所有规则"
-            echo "  show       - 显示当前规则"
-            echo "  add-user   - 添加单个用户规则"
-            echo ""
+# ==================== Main ====================
+
+case "${1:-setup}" in
+    setup)
+        log_info "Setting up all iptables rules..."
+        clear_rules
+        setup_base_rules
+        setup_user_rules
+        save_rules
+        log_info "Done!"
+        show_rules
+        ;;
+    clear)
+        clear_rules
+        save_rules
+        log_info "Rules cleared (firewall open, IPv6 re-enabled)"
+        ;;
+    show)
+        show_rules
+        ;;
+    add-user)
+        if [ $# -ne 6 ]; then
+            log_error "Usage: $0 add-user <user_id> <ip> <mac> <port> <mark>"
             exit 1
-            ;;
-    esac
-}
-
-main "$@"
+        fi
+        add_user_rules "$2" "$3" "$4" "$5" "$6"
+        save_rules
+        ;;
+    *)
+        echo "Usage: $0 {setup|clear|show|add-user}"
+        echo ""
+        echo "  setup                        - Build all rules from database"
+        echo "  clear                        - Remove all rules"
+        echo "  show                         - Display current rules"
+        echo "  add-user <id> <ip> <mac> <port> <mark>"
+        echo "                               - Add single user rules"
+        exit 1
+        ;;
+esac

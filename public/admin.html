@@ -380,7 +380,6 @@
         <div class="main-content">
             <div class="tabs">
                 <button class="tab active" onclick="switchTab('nodes')">节点管理</button>
-                <button class="tab" onclick="switchTab('devices')">设备审批</button>
                 <button class="tab" onclick="switchTab('users')">用户列表</button>
                 <button class="tab" onclick="switchTab('system')">系统管理</button>
             </div>
@@ -394,18 +393,6 @@
                     </div>
 
                     <div id="nodesTableContainer"></div>
-                </div>
-            </div>
-
-            <!-- 设备审批 -->
-            <div id="devicesTab" class="tab-content">
-                <div class="card">
-                    <div class="card-header">
-                        <h2 class="card-title">待审批设备</h2>
-                        <button class="btn btn-secondary btn-sm" onclick="loadPendingDevices()">刷新</button>
-                    </div>
-
-                    <div id="devicesTableContainer"></div>
                 </div>
             </div>
 
@@ -602,7 +589,6 @@
             document.getElementById('adminUsername').textContent = username;
 
             loadNodes();
-            loadPendingDevices();
             loadUsers();
         }
 
@@ -952,70 +938,6 @@
                 }
             } catch (error) {
                 alert('删除失败: ' + error.message);
-            }
-        }
-
-        // 加载待审批设备
-        async function loadPendingDevices() {
-            try {
-                const response = await fetch('/api/admin/pending-devices', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    const container = document.getElementById('devicesTableContainer');
-
-                    if (data.devices.length === 0) {
-                        container.innerHTML = '<div class="empty-state">暂无待审批设备</div>';
-                        return;
-                    }
-
-                    let html = '<table class="table"><thead><tr><th>MAC地址</th><th>主机名</th><th>首次发现</th><th>操作</th></tr></thead><tbody>';
-
-                    data.devices.forEach(device => {
-                        html += `
-                            <tr>
-                                <td>${device.mac_address}</td>
-                                <td>${device.hostname || '-'}</td>
-                                <td>${new Date(device.first_seen).toLocaleString()}</td>
-                                <td>
-                                    <button class="btn btn-success btn-sm" onclick="approveDevice(${device.id})">批准</button>
-                                </td>
-                            </tr>
-                        `;
-                    });
-
-                    html += '</tbody></table>';
-                    container.innerHTML = html;
-                }
-            } catch (error) {
-                console.error('加载设备失败:', error);
-            }
-        }
-
-        // 批准设备
-        async function approveDevice(id) {
-            if (!confirm('确定要批准此设备吗？')) return;
-
-            try {
-                const response = await fetch(`/api/admin/approve-device/${id}`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    alert(`设备已批准\n用户名: ${data.user.name}\nIP: ${data.user.ip_address}`);
-                    loadPendingDevices();
-                    loadUsers();
-                } else {
-                    alert('批准失败: ' + data.message);
-                }
-            } catch (error) {
-                alert('批准失败: ' + error.message);
             }
         }
 
