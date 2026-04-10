@@ -257,10 +257,8 @@ Description=NexusRoute dnsmasq (DHCP + DNS)
 After=network.target
 
 [Service]
-Type=forking
-PIDFile=/run/dnsmasq/dnsmasq.pid
-ExecStartPre=/bin/mkdir -p /run/dnsmasq
-ExecStart=/usr/sbin/dnsmasq --conf-file=/etc/dnsmasq.conf
+Type=simple
+ExecStart=/usr/sbin/dnsmasq --keep-in-foreground --conf-file=/etc/dnsmasq.conf
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 RestartSec=5
