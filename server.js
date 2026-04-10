@@ -543,6 +543,22 @@ app.post('/api/user/set-route', async (req, res) => {
     }
 });
 
+// 用户断开连接（停止代理，保留配置）
+app.post('/api/user/disconnect', async (req, res) => {
+    const clientIP = req.ip.replace('::ffff:', '');
+    try {
+        const user = db.prepare('SELECT * FROM users WHERE ip_address = ?').get(clientIP);
+        if (!user) {
+            return res.status(403).json({ success: false, message: '设备尚未就绪' });
+        }
+        const serviceName = `xray-${user.name}`;
+        await execCommand(`systemctl stop ${serviceName}`);
+        res.json({ success: true, message: '已断开连接' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 // 获取节点列表（用户端）
 app.get('/api/user/nodes', (req, res) => {
     const { hop_level } = req.query;

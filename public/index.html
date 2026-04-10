@@ -162,6 +162,21 @@
             box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
         }
 
+        .btn-danger {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(231, 76, 60, 0.3);
+        }
+
+        .btn-danger:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
         .btn-primary:disabled {
             opacity: 0.6;
             cursor: not-allowed;
@@ -266,12 +281,36 @@
             <button class="btn btn-primary" id="applyBtn" onclick="applyConfig()">
                 应用配置
             </button>
+            <button class="btn btn-danger" id="disconnectBtn" onclick="disconnectProxy()" style="display:none; margin-top:10px;">
+                断开连接
+            </button>
         </div>
     </div>
 
     <script>
         let isConfiguring = false;
         let debounceTimer = null;
+
+        // 断开连接
+        async function disconnectProxy() {
+            if (!confirm('确定要断开代理连接吗？')) return;
+            const btn = document.getElementById('disconnectBtn');
+            btn.disabled = true;
+            btn.textContent = '断开中...';
+            try {
+                const response = await fetch('/api/user/disconnect', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    loadStatus();
+                } else {
+                    alert('断开失败: ' + data.message);
+                }
+            } catch (error) {
+                alert('断开失败: ' + error.message);
+            }
+            btn.disabled = false;
+            btn.textContent = '断开连接';
+        }
 
         // 加载节点列表
         async function loadNodes() {
@@ -342,6 +381,7 @@
                         exitIP.textContent = data.exit_ip || '-';
                         unauthorizedAlert.classList.add('hidden');
                         configForm.style.display = 'block';
+                        document.getElementById('disconnectBtn').style.display = 'block';
 
                         // 更新当前路由选择
                         if (data.current_route) {
@@ -354,6 +394,7 @@
                         exitIP.textContent = '-';
                         unauthorizedAlert.classList.add('hidden');
                         configForm.style.display = 'block';
+                        document.getElementById('disconnectBtn').style.display = 'none';
                     }
                 }
             } catch (error) {

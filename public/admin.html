@@ -542,6 +542,7 @@
     <script>
         let token = localStorage.getItem('nexusroute_token');
         let currentNodeId = null;
+        let nodesData = [];
 
         // 登录
         async function login(event) {
@@ -617,6 +618,7 @@
                 const data = await response.json();
 
                 if (data.success) {
+                    nodesData = data.nodes;
                     const container = document.getElementById('nodesTableContainer');
 
                     if (data.nodes.length === 0) {
@@ -637,6 +639,7 @@
                                 <td>${node.port}</td>
                                 <td><span class="badge ${node.enabled ? 'badge-success' : 'badge-danger'}">${node.enabled ? '启用' : '禁用'}</span></td>
                                 <td>
+                                    <button class="btn btn-primary btn-sm" onclick="showEditNodeModal(${node.id})">编辑</button>
                                     <button class="btn btn-danger btn-sm" onclick="deleteNode(${node.id})">删除</button>
                                 </td>
                             </tr>
@@ -657,6 +660,27 @@
             document.getElementById('nodeModalTitle').textContent = '添加节点';
             document.getElementById('nodeModal').classList.add('active');
             document.querySelector('#nodeModal form').reset();
+            updateNodeForm();
+        }
+
+        function showEditNodeModal(nodeId) {
+            const node = nodesData.find(n => n.id === nodeId);
+            if (!node) return;
+            currentNodeId = nodeId;
+            document.getElementById('nodeModalTitle').textContent = '编辑节点';
+            document.getElementById('nodeModal').classList.add('active');
+            document.getElementById('nodeName').value = node.name || '';
+            document.getElementById('nodeHopLevel').value = node.hop_level || 1;
+            document.getElementById('nodeProtocol').value = node.protocol || 'vmess';
+            document.getElementById('nodeNetwork').value = node.network || 'tcp';
+            document.getElementById('nodePort').value = node.port || '';
+            document.getElementById('nodeAddress').value = node.address || '';
+            document.getElementById('nodeUuid').value = node.uuid || '';
+            document.getElementById('nodePassword').value = node.password || '';
+            document.getElementById('nodeTls').value = node.tls || 'none';
+            document.getElementById('nodeSni').value = node.sni || '';
+            document.getElementById('nodeWsPath').value = node.ws_path || '';
+            document.getElementById('nodeGrpcService').value = node.grpc_service_name || '';
             updateNodeForm();
         }
 
@@ -893,12 +917,16 @@
                 password: document.getElementById('nodePassword').value || null,
                 sni: document.getElementById('nodeSni').value || null,
                 ws_path: document.getElementById('nodeWsPath').value || null,
-                grpc_service_name: document.getElementById('nodeGrpcService').value || null
+                grpc_service_name: document.getElementById('nodeGrpcService').value || null,
+                enabled: true
             };
 
             try {
-                const response = await fetch('/api/admin/nodes', {
-                    method: 'POST',
+                const url = currentNodeId
+                    ? `/api/admin/nodes/${currentNodeId}`
+                    : '/api/admin/nodes';
+                const response = await fetch(url, {
+                    method: currentNodeId ? 'PUT' : 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
