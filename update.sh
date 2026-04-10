@@ -152,8 +152,39 @@ EOF
         log_success "Database migration completed"
     fi
 else
-    log_info "Database schema is up to date"
+    log_info "hop_level column already exists"
 fi
+
+# Check if pending_devices table exists
+PENDING_DEVICES_EXISTS=$(sqlite3 "$DB_PATH" "SELECT name FROM sqlite_master WHERE type='table' AND name='pending_devices';" | wc -l)
+
+if [ "$PENDING_DEVICES_EXISTS" -eq 0 ]; then
+    log_info "Applying database migration: creating pending_devices table..."
+
+    if [ -f "$TEMP_DIR/migrate_add_pending_devices.sql" ]; then
+        sqlite3 "$DB_PATH" < "$TEMP_DIR/migrate_add_pending_devices.sql"
+        log_success "pending_devices table created"
+    else
+        log_warn "Migration file not found, applying inline migration..."
+        sqlite3 "$DB_PATH" <<EOF
+CREATE TABLE IF NOT EXISTS pending_devices (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mac_address TEXT UNIQUE NOT NULL,
+  first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+  hostname TEXT,
+  status TEXT DEFAULT 'pending'
+);
+CREATE INDEX IF NOT EXISTS idx_pending_devices_status ON pending_devices(status);
+CREATE INDEX IF NOT EXISTS idx_pending_devices_mac ON pending_devices(mac_address);
+EOF
+        log_success "pending_devices table created"
+    fi
+else
+    log_info "pending_devices table already exists"
+fi
+
+log_success "Database schema is up to date"
 
 # Step 7: Install/update dependencies
 log_info "Checking dependencies..."
