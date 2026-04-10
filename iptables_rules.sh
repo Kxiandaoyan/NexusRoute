@@ -161,7 +161,27 @@ add_user_rules() {
         -m comment --comment "user${USER_ID}: Anti-spoofing" \
         -j DROP
 
-    # 标记合法流量（TCP + UDP + ICMP + 所有其他协议都会被标记）
+    # ==================== 内网流量豁免（关键！） ====================
+    # 不把访问内网的流量送进 TPROXY，否则网关 Web/DNS/DHCP 全部瘫痪
+    # 包括：LAN 设备访问网关自身、跨网段管理通道、广播包
+    iptables -t mangle -A PREROUTING -i $LAN_IF \
+        -s ${USER_IP} -d 192.168.0.0/16 \
+        -m comment --comment "user${USER_ID}: Bypass LAN" \
+        -j RETURN
+    iptables -t mangle -A PREROUTING -i $LAN_IF \
+        -s ${USER_IP} -d 10.0.0.0/8 \
+        -m comment --comment "user${USER_ID}: Bypass private" \
+        -j RETURN
+    iptables -t mangle -A PREROUTING -i $LAN_IF \
+        -s ${USER_IP} -d 172.16.0.0/12 \
+        -m comment --comment "user${USER_ID}: Bypass private" \
+        -j RETURN
+    iptables -t mangle -A PREROUTING -i $LAN_IF \
+        -s ${USER_IP} -d 255.255.255.255/32 \
+        -m comment --comment "user${USER_ID}: Bypass broadcast" \
+        -j RETURN
+
+    # 标记合法外网流量（只有非内网流量才会被标记送入 TPROXY）
     iptables -t mangle -A PREROUTING -i $LAN_IF \
         -s ${USER_IP} \
         -m mac --mac-source ${USER_MAC} \
