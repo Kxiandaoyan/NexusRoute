@@ -34,7 +34,7 @@ log_step $STEP $TOTAL_STEPS "Select Network Interfaces"
 
 echo "Available network interfaces:"
 echo ""
-mapfile -a IFACES < <(ip -o link show | awk -F': ' '{print $2}' | grep -v '^lo$')
+mapfile -t IFACES < <(ip -o link show | awk -F': ' '{print $2}' | grep -v '^lo$')
 i=1
 for iface in "${IFACES[@]}"; do
     ip_addr=$(ip -4 addr show "$iface" 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1)
