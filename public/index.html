@@ -281,30 +281,30 @@
 
                 if (data.success) {
                     const selects = [
-                        document.getElementById('node1Select'),
-                        document.getElementById('node2Select'),
-                        document.getElementById('node3Select')
+                        { element: document.getElementById('node1Select'), hopLevel: 1 },
+                        { element: document.getElementById('node2Select'), hopLevel: 2 },
+                        { element: document.getElementById('node3Select'), hopLevel: 3 }
                     ];
 
-                    selects.forEach((select, index) => {
-                        const currentValue = select.value;
+                    selects.forEach(({ element, hopLevel }) => {
+                        const currentValue = element.value;
 
                         // 清空选项（保留第一个默认选项）
-                        while (select.options.length > 1) {
-                            select.remove(1);
+                        while (element.options.length > 1) {
+                            element.remove(1);
                         }
 
-                        // 添加节点选项
-                        data.nodes.forEach(node => {
+                        // 只添加对应层级的节点
+                        data.nodes.filter(node => node.hop_level === hopLevel).forEach(node => {
                             const option = document.createElement('option');
                             option.value = node.id;
                             option.textContent = `${node.name} (${node.protocol})`;
-                            select.appendChild(option);
+                            element.appendChild(option);
                         });
 
                         // 恢复之前的选择
                         if (currentValue) {
-                            select.value = currentValue;
+                            element.value = currentValue;
                         }
                     });
                 }

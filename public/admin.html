@@ -448,12 +448,28 @@
             </div>
 
             <form onsubmit="saveNode(event)">
+                <!-- Import from link section -->
+                <div class="form-group" style="background: #f8f9fa; padding: 16px; border-radius: 8px; margin-bottom: 20px;">
+                    <label class="form-label">从链接导入 (可选)</label>
+                    <textarea class="form-input" id="proxyLinkInput" placeholder="粘贴 vless://、trojan://、vmess:// 或 ss:// 链接" rows="3" style="font-family: monospace; font-size: 12px;"></textarea>
+                    <button type="button" class="btn btn-secondary" onclick="parseProxyLink()" style="margin-top: 8px; width: 100%;">解析链接</button>
+                </div>
+
                 <div class="form-group">
                     <label class="form-label">节点名称</label>
                     <input type="text" class="form-input" id="nodeName" required>
                 </div>
 
                 <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">跳数层级</label>
+                        <select class="form-input" id="nodeHopLevel" required>
+                            <option value="1">第一跳</option>
+                            <option value="2">第二跳</option>
+                            <option value="3">第三跳</option>
+                        </select>
+                    </div>
+
                     <div class="form-group">
                         <label class="form-label">协议</label>
                         <select class="form-input" id="nodeProtocol" onchange="updateNodeForm()" required>
@@ -464,7 +480,9 @@
                             <option value="socks">Socks5</option>
                         </select>
                     </div>
+                </div>
 
+                <div class="form-row">
                     <div class="form-group">
                         <label class="form-label">传输协议</label>
                         <select class="form-input" id="nodeNetwork" onchange="updateNodeForm()">
@@ -474,18 +492,16 @@
                             <option value="h2">HTTP/2</option>
                         </select>
                     </div>
-                </div>
-
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">服务器地址</label>
-                        <input type="text" class="form-input" id="nodeAddress" required>
-                    </div>
 
                     <div class="form-group">
                         <label class="form-label">端口</label>
                         <input type="number" class="form-input" id="nodePort" required>
                     </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">服务器地址</label>
+                    <input type="text" class="form-input" id="nodeAddress" required>
                 </div>
 
                 <div id="uuidField" class="form-group">
@@ -622,12 +638,14 @@
                         return;
                     }
 
-                    let html = '<table class="table"><thead><tr><th>名称</th><th>协议</th><th>地址</th><th>端口</th><th>状态</th><th>操作</th></tr></thead><tbody>';
+                    let html = '<table class="table"><thead><tr><th>名称</th><th>层级</th><th>协议</th><th>地址</th><th>端口</th><th>状态</th><th>操作</th></tr></thead><tbody>';
 
                     data.nodes.forEach(node => {
+                        const hopLevelText = node.hop_level === 1 ? '第一跳' : node.hop_level === 2 ? '第二跳' : '第三跳';
                         html += `
                             <tr>
                                 <td>${node.name}</td>
+                                <td><span class="badge badge-success">${hopLevelText}</span></td>
                                 <td>${node.protocol.toUpperCase()}</td>
                                 <td>${node.address}</td>
                                 <td>${node.port}</td>
@@ -692,12 +710,194 @@
             sniField.classList.toggle('hidden', tls === 'none');
         }
 
+        // 解析代理链接
+        function parseProxyLink() {
+            const linkInput = document.getElementById('proxyLinkInput').value.trim();
+            if (!linkInput) {
+                alert('请输入代理链接');
+                return;
+            }
+
+            try {
+                let parsed = null;
+
+                if (linkInput.startsWith('vless://')) {
+                    parsed = parseVlessLink(linkInput);
+                } else if (linkInput.startsWith('trojan://')) {
+                    parsed = parseTrojanLink(linkInput);
+                } else if (linkInput.startsWith('vmess://')) {
+                    parsed = parseVmessLink(linkInput);
+                } else if (linkInput.startsWith('ss://')) {
+                    parsed = parseShadowsocksLink(linkInput);
+                } else {
+                    alert('不支持的协议。支持: vless://, trojan://, vmess://, ss://');
+                    return;
+                }
+
+                if (parsed) {
+                    fillNodeForm(parsed);
+                    alert('链接解析成功！请检查并补充必要信息。');
+                }
+            } catch (error) {
+                alert('解析失败: ' + error.message);
+                console.error('Parse error:', error);
+            }
+        }
+
+        // 解析 VLESS 链接
+        function parseVlessLink(link) {
+            // vless://uuid@host:port?params#name
+            const match = link.match(/^vless:\/\/([^@]+)@([^:]+):(\d+)\?(.+?)(?:#(.+))?$/);
+            if (!match) throw new Error('VLESS 链接格式错误');
+
+            const [, uuid, host, port, paramsStr, name] = match;
+            const params = new URLSearchParams(paramsStr);
+
+            return {
+                protocol: 'vless',
+                name: name ? decodeURIComponent(name) : `VLESS-${host}`,
+                address: host,
+                port: parseInt(port),
+                uuid: uuid,
+                network: params.get('type') || 'tcp',
+                tls: params.get('security') === 'tls' ? 'tls' : (params.get('security') === 'xtls' ? 'xtls' : 'none'),
+                sni: params.get('sni') || params.get('host') || '',
+                ws_path: params.get('path') || '',
+                grpc_service_name: params.get('serviceName') || '',
+                headerType: params.get('headerType')
+            };
+        }
+
+        // 解析 Trojan 链接
+        function parseTrojanLink(link) {
+            // trojan://password@host:port?params#name
+            const match = link.match(/^trojan:\/\/([^@]+)@([^:]+):(\d+)(?:\?(.+?))?(?:#(.+))?$/);
+            if (!match) throw new Error('Trojan 链接格式错误');
+
+            const [, password, host, port, paramsStr, name] = match;
+            const params = paramsStr ? new URLSearchParams(paramsStr) : new URLSearchParams();
+
+            return {
+                protocol: 'trojan',
+                name: name ? decodeURIComponent(name) : `Trojan-${host}`,
+                address: host,
+                port: parseInt(port),
+                password: password,
+                network: params.get('type') || 'tcp',
+                tls: params.get('security') === 'tls' ? 'tls' : 'none',
+                sni: params.get('sni') || params.get('host') || '',
+                ws_path: params.get('path') || '',
+                grpc_service_name: params.get('serviceName') || '',
+                headerType: params.get('headerType')
+            };
+        }
+
+        // 解析 VMess 链接
+        function parseVmessLink(link) {
+            // vmess://base64(json)
+            const base64Str = link.substring(8);
+            const jsonStr = atob(base64Str);
+            const config = JSON.parse(jsonStr);
+
+            return {
+                protocol: 'vmess',
+                name: config.ps || config.name || `VMess-${config.add}`,
+                address: config.add || config.address,
+                port: parseInt(config.port),
+                uuid: config.id || config.uuid,
+                network: config.net || config.network || 'tcp',
+                tls: config.tls === 'tls' ? 'tls' : 'none',
+                sni: config.sni || config.host || '',
+                ws_path: config.path || '',
+                grpc_service_name: config.serviceName || '',
+                headerType: config.type
+            };
+        }
+
+        // 解析 Shadowsocks 链接
+        function parseShadowsocksLink(link) {
+            // ss://base64(method:password)@host:port#name
+            // or ss://base64(method:password@host:port)#name
+            let match = link.match(/^ss:\/\/([^@#]+)@([^:#]+):(\d+)(?:#(.+))?$/);
+
+            if (match) {
+                const [, base64Part, host, port, name] = match;
+                const decoded = atob(base64Part);
+                const [method, password] = decoded.split(':');
+
+                return {
+                    protocol: 'shadowsocks',
+                    name: name ? decodeURIComponent(name) : `SS-${host}`,
+                    address: host,
+                    port: parseInt(port),
+                    password: password,
+                    method: method,
+                    network: 'tcp',
+                    tls: 'none'
+                };
+            }
+
+            // Try alternative format
+            match = link.match(/^ss:\/\/([^#]+)(?:#(.+))?$/);
+            if (match) {
+                const [, base64Part, name] = match;
+                const decoded = atob(base64Part);
+                const match2 = decoded.match(/^([^:]+):([^@]+)@([^:]+):(\d+)$/);
+
+                if (match2) {
+                    const [, method, password, host, port] = match2;
+                    return {
+                        protocol: 'shadowsocks',
+                        name: name ? decodeURIComponent(name) : `SS-${host}`,
+                        address: host,
+                        port: parseInt(port),
+                        password: password,
+                        method: method,
+                        network: 'tcp',
+                        tls: 'none'
+                    };
+                }
+            }
+
+            throw new Error('Shadowsocks 链接格式错误');
+        }
+
+        // 填充表单
+        function fillNodeForm(parsed) {
+            document.getElementById('nodeName').value = parsed.name || '';
+            document.getElementById('nodeProtocol').value = parsed.protocol;
+            document.getElementById('nodeAddress').value = parsed.address;
+            document.getElementById('nodePort').value = parsed.port;
+            document.getElementById('nodeNetwork').value = parsed.network;
+            document.getElementById('nodeTls').value = parsed.tls || 'none';
+
+            if (parsed.uuid) {
+                document.getElementById('nodeUuid').value = parsed.uuid;
+            }
+            if (parsed.password) {
+                document.getElementById('nodePassword').value = parsed.password;
+            }
+            if (parsed.sni) {
+                document.getElementById('nodeSni').value = parsed.sni;
+            }
+            if (parsed.ws_path) {
+                document.getElementById('nodeWsPath').value = parsed.ws_path;
+            }
+            if (parsed.grpc_service_name) {
+                document.getElementById('nodeGrpcService').value = parsed.grpc_service_name;
+            }
+
+            // Trigger form update to show/hide fields
+            updateNodeForm();
+        }
+
         // 保存节点
         async function saveNode(event) {
             event.preventDefault();
 
             const nodeData = {
                 name: document.getElementById('nodeName').value,
+                hop_level: parseInt(document.getElementById('nodeHopLevel').value),
                 protocol: document.getElementById('nodeProtocol').value,
                 address: document.getElementById('nodeAddress').value,
                 port: parseInt(document.getElementById('nodePort').value),

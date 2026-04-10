@@ -386,6 +386,7 @@ CREATE TABLE IF NOT EXISTS nodes (
   grpc_mode TEXT DEFAULT 'gun',
   flow TEXT,
   remarks TEXT,
+  hop_level INTEGER DEFAULT 1,
   enabled BOOLEAN DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

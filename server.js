@@ -16,6 +16,11 @@ const DB_PATH = path.join(__dirname, 'db.sqlite');
 app.use(express.json());
 app.use(express.static('public'));
 
+// 路由映射
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
 // 数据库连接
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
@@ -438,7 +443,7 @@ app.post('/api/admin/login', (req, res) => {
 
 // 获取所有节点
 app.get('/api/admin/nodes', authenticateToken, (req, res) => {
-    const nodes = db.prepare('SELECT * FROM nodes ORDER BY id DESC').all();
+    const nodes = db.prepare('SELECT * FROM nodes ORDER BY hop_level, id DESC').all();
     res.json({ success: true, nodes });
 });
 
@@ -451,8 +456,8 @@ app.post('/api/admin/nodes', authenticateToken, (req, res) => {
             INSERT INTO nodes (
                 name, protocol, address, port, uuid, alter_id, password,
                 encryption, network, tls, sni, alpn, fingerprint,
-                ws_path, ws_host, grpc_service_name, grpc_mode, flow, remarks
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ws_path, ws_host, grpc_service_name, grpc_mode, flow, remarks, hop_level
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
             node.name, node.protocol, node.address, node.port,
             node.uuid || null, node.alter_id || 0, node.password || null,
@@ -460,7 +465,7 @@ app.post('/api/admin/nodes', authenticateToken, (req, res) => {
             node.tls || 'none', node.sni || null, node.alpn || null,
             node.fingerprint || null, node.ws_path || null, node.ws_host || null,
             node.grpc_service_name || null, node.grpc_mode || 'gun',
-            node.flow || null, node.remarks || null
+            node.flow || null, node.remarks || null, node.hop_level || 1
         );
 
         res.json({ success: true, id: result.lastInsertRowid });
@@ -481,7 +486,7 @@ app.put('/api/admin/nodes/:id', authenticateToken, (req, res) => {
                 alter_id = ?, password = ?, encryption = ?, network = ?,
                 tls = ?, sni = ?, alpn = ?, fingerprint = ?,
                 ws_path = ?, ws_host = ?, grpc_service_name = ?,
-                grpc_mode = ?, flow = ?, remarks = ?, enabled = ?
+                grpc_mode = ?, flow = ?, remarks = ?, hop_level = ?, enabled = ?
             WHERE id = ?
         `).run(
             node.name, node.protocol, node.address, node.port, node.uuid || null,
@@ -490,7 +495,7 @@ app.put('/api/admin/nodes/:id', authenticateToken, (req, res) => {
             node.alpn || null, node.fingerprint || null, node.ws_path || null,
             node.ws_host || null, node.grpc_service_name || null,
             node.grpc_mode || 'gun', node.flow || null, node.remarks || null,
-            node.enabled ? 1 : 0, id
+            node.hop_level || 1, node.enabled ? 1 : 0, id
         );
 
         res.json({ success: true });
@@ -709,7 +714,19 @@ app.post('/api/user/set-route', async (req, res) => {
 
 // 获取所有节点（用户端，无需认证）
 app.get('/api/user/nodes', (req, res) => {
-    const nodes = db.prepare('SELECT id, name, address, protocol FROM nodes WHERE enabled = 1 ORDER BY id').all();
+    const { hop_level } = req.query;
+
+    let query = 'SELECT id, name, address, protocol, hop_level FROM nodes WHERE enabled = 1';
+    let params = [];
+
+    if (hop_level) {
+        query += ' AND hop_level = ?';
+        params.push(parseInt(hop_level));
+    }
+
+    query += ' ORDER BY hop_level, id';
+
+    const nodes = db.prepare(query).all(...params);
     res.json({ success: true, nodes });
 });
 

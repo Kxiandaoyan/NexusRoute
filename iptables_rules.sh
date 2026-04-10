@@ -63,7 +63,7 @@ clear_rules() {
 setup_base_rules() {
     log_info "设置基础防火墙规则..."
 
-    # 设置默认策略
+    # 设置默认策略（Kill Switch 核心）
     iptables -P INPUT ACCEPT
     iptables -P OUTPUT ACCEPT
     iptables -P FORWARD DROP  # 关键：默认拒绝转发，防止漏油
@@ -76,7 +76,7 @@ setup_base_rules() {
     iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
     iptables -A OUTPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
 
-    # 允许 eth1 的 DHCP 和 DNS 请求
+    # 允许 eth1 的 DHCP 和 DNS 请求（到网关本身）
     iptables -A INPUT -i eth1 -p udp --dport 67 -j ACCEPT  # DHCP
     iptables -A INPUT -i eth1 -p udp --dport 53 -j ACCEPT  # DNS
     iptables -A INPUT -i eth1 -p tcp --dport 53 -j ACCEPT  # DNS over TCP
@@ -87,7 +87,13 @@ setup_base_rules() {
     # 允许 SSH（可选，根据需要调整）
     iptables -A INPUT -p tcp --dport 22 -j ACCEPT
 
-    log_info "基础规则设置完成"
+    # 明确阻止 eth1 的 ICMP 转发（Kill Switch - 双重保险）
+    iptables -A FORWARD -i eth1 -p icmp -j DROP -m comment --comment "Kill Switch: Block ICMP forwarding"
+
+    # 明确阻止 eth1 的其他协议转发（Kill Switch - 只允许 TCP/UDP）
+    iptables -A FORWARD -i eth1 ! -p tcp ! -p udp -j DROP -m comment --comment "Kill Switch: Block non-TCP/UDP forwarding"
+
+    log_info "基础规则设置完成（含 Kill Switch 保护）"
 }
 
 # 为单个用户添加规则
@@ -137,7 +143,23 @@ add_user_rules() {
         -j TPROXY --on-port ${XRAY_PORT} --tproxy-mark 0x${MARK} \
         -m comment --comment "user${USER_ID}: TPROXY UDP"
 
-    log_info "用户 user${USER_ID} 规则添加完成"
+    # 6. 明确阻止 ICMP 流量（Kill Switch - 防止 IP 泄露）
+    iptables -t mangle -A PREROUTING -i eth1 \
+        -s ${USER_IP} \
+        -p icmp \
+        -j DROP \
+        -m comment --comment "user${USER_ID}: Block ICMP (Kill Switch)"
+
+    # 7. 明确阻止其他协议（Kill Switch - 只允许 TCP/UDP）
+    iptables -t mangle -A PREROUTING -i eth1 \
+        -s ${USER_IP} \
+        ! -p tcp \
+        ! -p udp \
+        ! -p icmp \
+        -j DROP \
+        -m comment --comment "user${USER_ID}: Block other protocols (Kill Switch)"
+
+    log_info "用户 user${USER_ID} 规则添加完成（含 Kill Switch 保护）"
 }
 
 # 从数据库读取用户信息并添加规则
