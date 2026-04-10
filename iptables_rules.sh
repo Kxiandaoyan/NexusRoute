@@ -112,13 +112,9 @@ setup_base_rules() {
     iptables -P FORWARD DROP
 
     # ==================== FORWARD Chain (Kill Switch) ====================
-    # 防线1: 显式阻断 LAN 的 ICMP 转发（防 ping 泄露真实 IP）
+    # FORWARD 默认策略 DROP 已阻断所有 LAN 转发（TCP/UDP/ICMP/GRE/SCTP/ESP 全部无法直连外网）
+    # 显式阻断 ICMP 仅作为双重保险（防止策略意外被改时 ping 泄露真实 IP）
     iptables -A FORWARD -i $LAN_IF -p icmp -m comment --comment "Kill Switch: Block ICMP" -j DROP
-
-    # 防线2: 显式阻断 LAN 的非 TCP/UDP 协议转发（GRE/SCTP/ESP 等）
-    iptables -A FORWARD -i $LAN_IF ! -p tcp ! -p udp -m comment --comment "Kill Switch: Block non-TCP/UDP" -j DROP
-
-    # 其余所有 LAN 转发被默认 DROP 策略阻断（TCP/UDP 也无法直连）
 
     # ==================== IPv6 Kill Switch ====================
     # 三重封杀 IPv6：sysctl + FORWARD DROP + LAN 接口全阻断
@@ -210,15 +206,11 @@ add_user_rules() {
         -j TPROXY --on-port ${XRAY_PORT} --tproxy-mark 0x${MARK}
 
     # 防线3: 阻断 ICMP（防止通过 ping 泄露真实 IP）
+    # 非 TCP/UDP/ICMP 协议（GRE/SCTP/ESP）不会被 TPROXY 规则匹配，
+    # 最终被 FORWARD DROP 策略阻断，无需额外 DROP 规则
     iptables -t mangle -A PREROUTING -i $LAN_IF \
         -s ${USER_IP} -p icmp \
         -m comment --comment "user${USER_ID}: Block ICMP" \
-        -j DROP
-
-    # 防线3: 阻断其他协议（GRE/SCTP/ESP 等，只允许 TCP/UDP 走代理）
-    iptables -t mangle -A PREROUTING -i $LAN_IF \
-        -s ${USER_IP} ! -p tcp ! -p udp ! -p icmp \
-        -m comment --comment "user${USER_ID}: Block other protocols" \
         -j DROP
 
     log_info "user${USER_ID} rules added"
