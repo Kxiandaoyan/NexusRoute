@@ -227,6 +227,17 @@ EOF
 mkdir -p /etc/dnsmasq.d
 log_info "dnsmasq configured (DHCP range $DHCP_START-$DHCP_END, permanent lease)"
 
+# System DNS - dnsmasq handles LAN devices only, Ubuntu uses public DNS directly
+# Installing dnsmasq may stop systemd-resolved, breaking Ubuntu's own DNS
+systemctl stop systemd-resolved 2>/dev/null || true
+systemctl disable systemd-resolved 2>/dev/null || true
+rm -f /etc/resolv.conf
+cat > /etc/resolv.conf <<DNS
+nameserver 8.8.8.8
+nameserver 1.1.1.1
+DNS
+log_info "System DNS configured (8.8.8.8, 1.1.1.1)"
+
 # ===================== Step 7: Deploy Application =====================
 STEP=$((STEP + 1))
 log_step $STEP $TOTAL_STEPS "Deploy Application"
