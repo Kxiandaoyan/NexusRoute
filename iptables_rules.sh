@@ -119,16 +119,22 @@ setup_base_rules() {
     # 其余所有 LAN 转发被默认 DROP 策略阻断（TCP/UDP 也无法直连）
 
     # ==================== IPv6 Kill Switch ====================
-    # 禁用 LAN 接口的 IPv6，防止设备通过 IPv6 绕过代理
-    # 只阻断 LAN 接口，不阻断 WAN（Ubuntu 自身可能需要 IPv6）
+    # 三重封杀 IPv6：sysctl + FORWARD DROP + LAN 接口全阻断
+    # 目的：防止 LAN 设备通过 IPv6 绕过代理
+
+    # 1. sysctl: 内核层面禁用 LAN 接口的 IPv6
     sysctl -w net.ipv6.conf.$LAN_IF.disable_ipv6=1 2>/dev/null || true
     sysctl -w net.ipv6.conf.$LAN_IF.forwarding=0 2>/dev/null || true
 
-    # ip6tables: 只阻断 LAN 接口的 IPv6，允许 WAN 和 lo
+    # 2. ip6tables FORWARD DROP: 即使 IPv6 没被完全禁用，也阻断所有转发
+    #    LAN 设备的 IPv6 流量永远无法通过网关转发到外网
+    # 3. LAN 接口 INPUT DROP: 拒绝 LAN 侧的 IPv6 连接到网关自身
+    # 4. Ubuntu 自身 OUTPUT ACCEPT: 不阻断 WAN 接口的 IPv6（apt/DNS 等可能需要）
     ip6tables -P INPUT ACCEPT 2>/dev/null || true
-    ip6tables -P FORWARD ACCEPT 2>/dev/null || true
+    ip6tables -P FORWARD DROP 2>/dev/null || true
     ip6tables -P OUTPUT ACCEPT 2>/dev/null || true
     ip6tables -F 2>/dev/null || true
+    ip6tables -A INPUT -i lo -j ACCEPT 2>/dev/null || true
     ip6tables -A INPUT -i $LAN_IF -j DROP 2>/dev/null || true
     ip6tables -A FORWARD -i $LAN_IF -j DROP 2>/dev/null || true
     ip6tables -A FORWARD -o $LAN_IF -j DROP 2>/dev/null || true
