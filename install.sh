@@ -278,16 +278,18 @@ DNSVC
 log_info "dnsmasq configured (DHCP range $DHCP_START-$DHCP_END, permanent lease)"
 
 # Step 6b: Free port 53 from systemd-resolved stub listener
-# Don't kill systemd-resolved - just tell it to stop grabbing 53
 log_info "Disabling systemd-resolved stub listener on port 53..."
 sed -i 's/^#\?DNSStubListener=.*/DNSStubListener=no/' /etc/systemd/resolved.conf
 systemctl restart systemd-resolved 2>/dev/null || true
 sleep 1
 
-# Fix Ubuntu DNS - point to real resolvers via systemd-resolved
+# Ubuntu DNS: write 8.8.8.8 directly (symlink to systemd-resolved is unreliable)
 rm -f /etc/resolv.conf
-ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf
-log_info "Port 53 freed, system DNS via systemd-resolved"
+cat > /etc/resolv.conf <<DNS
+nameserver 8.8.8.8
+nameserver 1.1.1.1
+DNS
+log_info "Port 53 freed, system DNS: 8.8.8.8"
 
 # ===================== Step 7: Deploy Application =====================
 STEP=$((STEP + 1))
