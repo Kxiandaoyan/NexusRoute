@@ -133,7 +133,7 @@ log_info "Installing tools..."
 export DEBIAN_FRONTEND=noninteractive
 echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
 echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
-apt-get install -y curl wget unzip sqlite3 jq iptables-persistent
+apt-get install -y curl wget unzip sqlite3 jq iptables-persistent build-essential python3
 
 # Node.js 18
 if command -v node &>/dev/null && [[ "$(node -v)" =~ ^v1[89]\. ]]; then
@@ -304,7 +304,8 @@ if [ -d "$SCRIPT_DIR/public" ]; then
 fi
 
 cd "$INSTALL_DIR"
-npm install --production 2>/dev/null || npm install
+log_info "Installing npm dependencies (may take a few minutes)..."
+npm install --production 2>&1 || npm install 2>&1
 cd -
 log_info "Dependencies installed"
 
