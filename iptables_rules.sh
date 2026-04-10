@@ -64,25 +64,24 @@ log_info "Interfaces: LAN=$LAN_IF  WAN=$WAN_IF  Gateway=$LAN_IP"
 clear_rules() {
     log_info "Clearing existing iptables rules..."
 
-    # Flush all IPv4 chains
+    # Set ACCEPT policies FIRST to prevent lockout during flush
+    # (if UFW or other firewall set INPUT policy to DROP)
+    iptables -P INPUT ACCEPT 2>/dev/null || true
+    iptables -P FORWARD ACCEPT 2>/dev/null || true
+    iptables -P OUTPUT ACCEPT 2>/dev/null || true
+    ip6tables -P INPUT ACCEPT 2>/dev/null || true
+    ip6tables -P FORWARD ACCEPT 2>/dev/null || true
+    ip6tables -P OUTPUT ACCEPT 2>/dev/null || true
+
+    # Now safe to flush all chains
     iptables -F 2>/dev/null || true
     iptables -X 2>/dev/null || true
     iptables -t mangle -F 2>/dev/null || true
     iptables -t mangle -X 2>/dev/null || true
     iptables -t nat -F 2>/dev/null || true
     iptables -t nat -X 2>/dev/null || true
-
-    # Flush all IPv6 chains
     ip6tables -F 2>/dev/null || true
     ip6tables -X 2>/dev/null || true
-
-    # Reset default policies
-    iptables -P INPUT ACCEPT
-    iptables -P FORWARD ACCEPT
-    iptables -P OUTPUT ACCEPT
-    ip6tables -P INPUT ACCEPT
-    ip6tables -P FORWARD ACCEPT
-    ip6tables -P OUTPUT ACCEPT
 
     # Clean up policy routing
     ip rule show | grep "fwmark" | while read -r line; do
@@ -120,18 +119,19 @@ setup_base_rules() {
     # 其余所有 LAN 转发被默认 DROP 策略阻断（TCP/UDP 也无法直连）
 
     # ==================== IPv6 Kill Switch ====================
-    # 防线4: 彻底禁用 LAN 接口的 IPv6，防止设备通过 IPv6 绕过代理
+    # 禁用 LAN 接口的 IPv6，防止设备通过 IPv6 绕过代理
+    # 只阻断 LAN 接口，不阻断 WAN（Ubuntu 自身可能需要 IPv6）
     sysctl -w net.ipv6.conf.$LAN_IF.disable_ipv6=1 2>/dev/null || true
     sysctl -w net.ipv6.conf.$LAN_IF.forwarding=0 2>/dev/null || true
 
-    # 兜底: 即使 IPv6 没被完全禁用，ip6tables 也阻断所有转发
-    ip6tables -P INPUT DROP 2>/dev/null || true
-    ip6tables -P FORWARD DROP 2>/dev/null || true
-    ip6tables -P OUTPUT DROP 2>/dev/null || true
+    # ip6tables: 只阻断 LAN 接口的 IPv6，允许 WAN 和 lo
+    ip6tables -P INPUT ACCEPT 2>/dev/null || true
+    ip6tables -P FORWARD ACCEPT 2>/dev/null || true
+    ip6tables -P OUTPUT ACCEPT 2>/dev/null || true
     ip6tables -F 2>/dev/null || true
-    # 只允许本机 lo 回环（sysctl 等本机内部通信需要）
-    ip6tables -A INPUT -i lo -j ACCEPT 2>/dev/null || true
-    ip6tables -A OUTPUT -o lo -j ACCEPT 2>/dev/null || true
+    ip6tables -A INPUT -i $LAN_IF -j DROP 2>/dev/null || true
+    ip6tables -A FORWARD -i $LAN_IF -j DROP 2>/dev/null || true
+    ip6tables -A FORWARD -o $LAN_IF -j DROP 2>/dev/null || true
 
     log_info "Base rules set (Kill Switch active: FORWARD DROP + IPv6 disabled)"
 }

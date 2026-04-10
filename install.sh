@@ -90,6 +90,14 @@ log_step $STEP $TOTAL_STEPS "Prepare Installation"
 
 # Stop old services
 log_info "Stopping old services..."
+
+# Disable UFW - it conflicts with our raw iptables rules
+if command -v ufw &>/dev/null; then
+    ufw disable 2>/dev/null || true
+    systemctl stop ufw 2>/dev/null || true
+    systemctl disable ufw 2>/dev/null || true
+fi
+
 systemctl stop nexusroute 2>/dev/null || true
 for svc in $(systemctl list-units --type=service --all 2>/dev/null | grep -oP 'xray-user\d+'); do
     systemctl stop "$svc" 2>/dev/null || true
