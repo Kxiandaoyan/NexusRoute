@@ -214,6 +214,15 @@ function generateXrayConfig(userId, nodes) {
         outbounds.push(outbound);
     });
 
+    // DNS outbound: processes DNS queries through Xray's DNS subsystem
+    // queryStrategy: UseIPv4 filters out AAAA records, then chains through proxy
+    outbounds.push({
+        tag: 'dns-out',
+        protocol: 'dns',
+        settings: {},
+        proxySettings: { tag: 'hop1' }
+    });
+
     return {
         log: { loglevel: 'warning' },
         dns: {
@@ -221,7 +230,7 @@ function generateXrayConfig(userId, nodes) {
                 { address: '1.1.1.1', skipFallback: true },
                 { address: '8.8.8.8', skipFallback: true }
             ],
-            queryStrategy: 'UseIP'
+            queryStrategy: 'UseIPv4'
         },
         inbounds: [
             {
@@ -238,7 +247,7 @@ function generateXrayConfig(userId, nodes) {
         routing: {
             domainStrategy: 'IPIfNonMatch',
             rules: [
-                { type: 'field', inboundTag: ['dns-in'], outboundTag: 'hop1' },
+                { type: 'field', inboundTag: ['dns-in'], outboundTag: 'dns-out' },
                 { type: 'field', inboundTag: ['tproxy-in'], outboundTag: 'hop1' }
             ]
         }
