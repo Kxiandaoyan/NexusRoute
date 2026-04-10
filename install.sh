@@ -122,6 +122,9 @@ apt-get update -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 || {
 }
 
 log_info "Installing tools..."
+export DEBIAN_FRONTEND=noninteractive
+echo iptables-persistent iptables-persistent/autosave_v4 boolean true | debconf-set-selections
+echo iptables-persistent iptables-persistent/autosave_v6 boolean true | debconf-set-selections
 apt-get install -y curl wget unzip sqlite3 jq iptables-persistent
 
 # Node.js 18
@@ -134,21 +137,19 @@ else
 fi
 log_info "Node.js $(node -v) / npm $(npm -v)"
 
-# Xray
-if [ -f "/usr/local/bin/xray" ]; then
-    log_info "Xray already installed ($(/usr/local/bin/xray version | head -1))"
-else
-    log_info "Installing Xray-core..."
-    wget -q --show-progress -O /tmp/xray.zip \
-        https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
-    unzip -q -o /tmp/xray.zip -d /tmp/xray
-    mv /tmp/xray/xray /usr/local/bin/xray
-    chmod +x /usr/local/bin/xray
-    setcap cap_net_admin,cap_net_bind_service=ep /usr/local/bin/xray
-    mkdir -p /usr/local/etc/xray
-    rm -rf /tmp/xray /tmp/xray.zip
-    log_info "Xray installed: $(/usr/local/bin/xray version | head -1)"
-fi
+# Xray - always fetch latest to ensure updates on reinstall
+log_info "Installing/Updating Xray-core..."
+wget -q --show-progress -O /tmp/xray.zip \
+    https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip 2>/dev/null || \
+    wget -q -O /tmp/xray.zip \
+    https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
+unzip -q -o /tmp/xray.zip -d /tmp/xray
+mv /tmp/xray/xray /usr/local/bin/xray
+chmod +x /usr/local/bin/xray
+setcap cap_net_admin,cap_net_bind_service=ep /usr/local/bin/xray
+mkdir -p /usr/local/etc/xray
+rm -rf /tmp/xray /tmp/xray.zip
+log_info "Xray installed: $(/usr/local/bin/xray version | head -1)"
 
 # dnsmasq
 apt-get install -y dnsmasq
@@ -178,14 +179,31 @@ network:
         - $LAN_IP/24
 EOF
     netplan apply
-    sleep 2
-    if ip addr show "$LAN_IF" | grep -q "$LAN_IP/24"; then
+    log_info "Waiting for $LAN_IF to come up..."
+    NETPLAN_SUCCESS=""
+    for i in 1 2 3 4 5; do
+        sleep 2
+        if ip addr show "$LAN_IF" | grep -q "$LAN_IP/24"; then
+            NETPLAN_SUCCESS=1
+            break
+        fi
+    done
+    if [ -n "$NETPLAN_SUCCESS" ]; then
         log_info "$LAN_IF configured: $LAN_IP/24"
     else
-        log_error "Failed to configure $LAN_IF"
+        log_error "Failed to configure $LAN_IF after 10 seconds"
         exit 1
     fi
 fi
+
+# Enable kernel IPv4 forwarding (essential for gateway/router)
+log_info "Enabling IPv4 forwarding..."
+sed -i '/net.ipv4.ip_forward/s/^#//g' /etc/sysctl.conf
+if ! grep -q "^net.ipv4.ip_forward=1" /etc/sysctl.conf; then
+    echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+fi
+sysctl -w net.ipv4.ip_forward=1 > /dev/null
+log_info "IPv4 forwarding enabled"
 
 # Write config.json for server.js and iptables_rules.sh
 cat > "$INSTALL_DIR/config.json" <<EOF
