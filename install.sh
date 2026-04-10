@@ -226,7 +226,8 @@ cat > /etc/dnsmasq.conf <<EOF
 port=53
 interface=$LAN_IF
 listen-address=$LAN_IP
-bind-interfaces
+except-interface=lo
+bind-dynamic
 
 no-resolv
 no-hosts
@@ -403,6 +404,10 @@ EOF
 
 systemctl daemon-reload
 systemctl enable dnsmasq nexusroute
+
+# Kill any leftover dnsmasq processes before starting fresh
+killall dnsmasq 2>/dev/null || true
+sleep 1
 
 log_info "Starting dnsmasq..."
 if ! systemctl start dnsmasq; then
