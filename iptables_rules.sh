@@ -90,6 +90,8 @@ clear_rules() {
     done
 
     for i in $(seq 100 399); do
+        # Skip system routing tables: 253(default) 254(main) 255(local)
+        [ "$i" = "253" ] || [ "$i" = "254" ] || [ "$i" = "255" ] && continue
         ip route flush table $i 2>/dev/null || true
     done
 
