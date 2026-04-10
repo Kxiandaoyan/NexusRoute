@@ -252,20 +252,17 @@ DNSVC
 
 log_info "dnsmasq configured (DHCP range $DHCP_START-$DHCP_END, permanent lease)"
 
-# System DNS - dnsmasq handles LAN devices only, Ubuntu uses public DNS directly
-# Must fully kill systemd-resolved so it can't reclaim port 53
-systemctl stop systemd-resolved 2>/dev/null || true
-systemctl disable systemd-resolved 2>/dev/null || true
-systemctl mask systemd-resolved 2>/dev/null || true
-# Kill anything still on port 53
-fuser -k 53/tcp 53/udp 2>/dev/null || true
+# Step 6b: Free port 53 from systemd-resolved stub listener
+# Don't kill systemd-resolved - just tell it to stop grabbing 53
+log_info "Disabling systemd-resolved stub listener on port 53..."
+sed -i 's/^#\?DNSStubListener=.*/DNSStubListener=no/' /etc/systemd/resolved.conf
+systemctl restart systemd-resolved 2>/dev/null || true
 sleep 1
+
+# Fix Ubuntu DNS - point to real resolvers via systemd-resolved
 rm -f /etc/resolv.conf
-cat > /etc/resolv.conf <<DNS
-nameserver 8.8.8.8
-nameserver 1.1.1.1
-DNS
-log_info "System DNS configured (8.8.8.8, 1.1.1.1)"
+ln -s /run/systemd/resolve/resolv.conf /etc/resolv.conf
+log_info "Port 53 freed, system DNS via systemd-resolved"
 
 # ===================== Step 7: Deploy Application =====================
 STEP=$((STEP + 1))
@@ -388,10 +385,6 @@ EOF
 
 systemctl daemon-reload
 systemctl enable dnsmasq nexusroute
-
-# Ensure port 53 is free before starting dnsmasq
-fuser -k 53/tcp 53/udp 2>/dev/null || true
-sleep 1
 
 log_info "Starting dnsmasq..."
 if ! systemctl start dnsmasq; then
