@@ -225,9 +225,19 @@ log-dhcp
 conf-dir=/etc/dnsmasq.d
 EOF
 
-# Clear any leftover dnsmasq config snippets that might add listen-address
+# Clear ALL leftover dnsmasq config snippets (dpkg may leave .dpkg-dist etc.)
 mkdir -p /etc/dnsmasq.d
-rm -f /etc/dnsmasq.d/*.conf /etc/dnsmasq.d/*.dpkg-* 2>/dev/null || true
+rm -f /etc/dnsmasq.d/* 2>/dev/null || true
+
+# Override Ubuntu's dnsmasq systemd service - remove --local-service and -7
+# flags that force listening on 127.0.0.1 and read extra config dirs
+mkdir -p /etc/systemd/system/dnsmasq.service.d
+cat > /etc/systemd/system/dnsmasq.service.d/override.conf << 'DNOV'
+[Service]
+ExecStart=
+ExecStart=/usr/sbin/dnsmasq -x /run/dnsmasq/dnsmasq.pid -u dnsmasq --conf-file=/etc/dnsmasq.conf
+DNOV
+
 log_info "dnsmasq configured (DHCP range $DHCP_START-$DHCP_END, permanent lease)"
 
 # System DNS - dnsmasq handles LAN devices only, Ubuntu uses public DNS directly
