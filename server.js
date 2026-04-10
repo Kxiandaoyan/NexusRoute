@@ -248,7 +248,7 @@ function generateXrayConfig(userId, nodes) {
             domainStrategy: 'IPIfNonMatch',
             rules: [
                 { type: 'field', inboundTag: ['dns-in'], outboundTag: 'dns-out' },
-                { type: 'field', inboundTag: ['tproxy-in'], outboundTag: 'hop1' }
+                { type: 'field', inboundTag: ['tproxy-in'], outboundTag: `hop${nodes.length}` }
             ]
         }
     };
