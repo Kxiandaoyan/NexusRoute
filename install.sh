@@ -250,7 +250,7 @@ log_info "Dependencies installed"
 STEP=$((STEP + 1))
 log_step $STEP $TOTAL_STEPS "Initialize Database"
 
-ADMIN_PASSWORD_HASH=$(node -e "
+ADMIN_PASSWORD_HASH=$(cd "$INSTALL_DIR" && node -e "
 const bcrypt = require('bcryptjs');
 console.log(bcrypt.hashSync('$ADMIN_PASSWORD', 10));
 " 2>/dev/null)
