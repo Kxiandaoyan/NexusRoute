@@ -189,7 +189,7 @@ add_user_rules() {
     # DNS 由 dnsmasq 单独处理，UDP 流量由 FORWARD DROP 阻断（Kill Switch）
     # 排除内网目的地（否则访问网关自身的 Web/DNS 也会被重定向）
     iptables -t nat -A PREROUTING -i $LAN_IF \
-        -s ${USER_IP} -p tcp ! -d 192.168.0.0/16 \
+        -s ${USER_IP} -p tcp -d \! 192.168.0.0/16 \
         -m comment --comment "user${USER_ID}: REDIRECT TCP" \
         -j REDIRECT --to-port ${XRAY_PORT}
 
