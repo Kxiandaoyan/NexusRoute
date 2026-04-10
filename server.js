@@ -216,6 +216,13 @@ function generateXrayConfig(userId, nodes) {
 
     return {
         log: { loglevel: 'warning' },
+        dns: {
+            servers: [
+                { address: '1.1.1.1', skipFallback: true },
+                { address: '8.8.8.8', skipFallback: true }
+            ],
+            queryStrategy: 'UseIP'
+        },
         inbounds: [
             {
                 tag: 'tproxy-in', port: user.xray_port, protocol: 'dokodemo-door',
@@ -229,7 +236,7 @@ function generateXrayConfig(userId, nodes) {
         ],
         outbounds,
         routing: {
-            domainStrategy: 'AsIs',
+            domainStrategy: 'IPIfNonMatch',
             rules: [
                 { type: 'field', inboundTag: ['dns-in'], outboundTag: 'hop1' },
                 { type: 'field', inboundTag: ['tproxy-in'], outboundTag: 'hop1' }

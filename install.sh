@@ -240,10 +240,6 @@ bind-dynamic
 no-resolv
 no-hosts
 
-# Filter AAAA (IPv6) records - IPv6 is blocked by Kill Switch
-# Without this, clients try IPv6 first and timeout
-filter-aaaa
-
 # DNS via Xray
 server=127.0.0.1#5353
 
