@@ -13,7 +13,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-GITHUB_REPO="https://github.com/YOUR_USERNAME/NexusRoute"
+GITHUB_REPO="https://github.com/Kxiandaoyan/NexusRoute"
 GITHUB_BRANCH="main"
 INSTALL_DIR="/opt/nexusroute"
 DB_PATH="$INSTALL_DIR/db.sqlite"

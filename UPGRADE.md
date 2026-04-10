@@ -19,7 +19,7 @@
 
 ```bash
 # 下载升级脚本
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/NexusRoute/main/update.sh
+curl -O https://raw.githubusercontent.com/Kxiandaoyan/NexusRoute/main/update.sh
 
 # 添加执行权限
 chmod +x update.sh
@@ -53,7 +53,7 @@ sudo cp /opt/nexusroute/db.sqlite /opt/nexusroute/backup/
 2. 下载最新代码：
 ```bash
 cd /tmp
-git clone https://github.com/YOUR_USERNAME/NexusRoute.git
+git clone https://github.com/Kxiandaoyan/NexusRoute.git
 cd NexusRoute
 ```
 
@@ -139,7 +139,7 @@ sudo journalctl -u nexusroute -n 50
 A: 检查服务器网络连接，或者使用代理：
 ```bash
 export https_proxy=http://your-proxy:port
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/NexusRoute/main/update.sh
+curl -O https://raw.githubusercontent.com/Kxiandaoyan/NexusRoute/main/update.sh
 ```
 
 ### Q: 数据库迁移失败怎么办？
