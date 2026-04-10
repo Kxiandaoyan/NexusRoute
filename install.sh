@@ -229,15 +229,26 @@ EOF
 mkdir -p /etc/dnsmasq.d
 rm -f /etc/dnsmasq.d/* 2>/dev/null || true
 
-# Override Ubuntu's dnsmasq systemd service - remove --local-service and -7
-# flags that force listening on 127.0.0.1 and read extra config dirs
-mkdir -p /etc/systemd/system/dnsmasq.service.d
-cat > /etc/systemd/system/dnsmasq.service.d/override.conf << 'DNOV'
+# Replace Ubuntu's dnsmasq systemd service entirely (override was unreliable)
+# /etc/systemd/system/ takes priority over /lib/systemd/system/
+rm -rf /etc/systemd/system/dnsmasq.service.d
+cat > /etc/systemd/system/dnsmasq.service << 'DNSVC'
+[Unit]
+Description=NexusRoute dnsmasq (DHCP + DNS)
+After=network.target
+
 [Service]
-ExecStartPre=
-ExecStart=
-ExecStart=/usr/sbin/dnsmasq -x /run/dnsmasq/dnsmasq.pid -u dnsmasq --conf-file=/etc/dnsmasq.conf
-DNOV
+Type=forking
+PIDFile=/run/dnsmasq/dnsmasq.pid
+ExecStartPre=/bin/mkdir -p /run/dnsmasq
+ExecStart=/usr/sbin/dnsmasq --conf-file=/etc/dnsmasq.conf
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+DNSVC
 
 log_info "dnsmasq configured (DHCP range $DHCP_START-$DHCP_END, permanent lease)"
 
