@@ -207,6 +207,7 @@ cat > /etc/dnsmasq.conf <<EOF
 
 port=53
 interface=$LAN_IF
+listen-address=$LAN_IP
 bind-interfaces
 
 no-resolv
@@ -224,7 +225,9 @@ log-dhcp
 conf-dir=/etc/dnsmasq.d
 EOF
 
+# Clear any leftover dnsmasq config snippets that might add listen-address
 mkdir -p /etc/dnsmasq.d
+rm -f /etc/dnsmasq.d/*.conf /etc/dnsmasq.d/*.dpkg-* 2>/dev/null || true
 log_info "dnsmasq configured (DHCP range $DHCP_START-$DHCP_END, permanent lease)"
 
 # System DNS - dnsmasq handles LAN devices only, Ubuntu uses public DNS directly
