@@ -236,7 +236,7 @@ function generateXrayConfig(userId, nodes) {
             {
                 tag: 'tproxy-in', port: user.xray_port, protocol: 'dokodemo-door',
                 settings: { network: 'tcp,udp', followRedirect: true },
-                streamSettings: { sockopt: { tproxy: 'tproxy', mark: user.iptables_mark } }
+                streamSettings: { sockopt: { tproxy: 'redirect' } }
             },
             {
                 tag: 'dns-in', port: 5353, protocol: 'dokodemo-door',

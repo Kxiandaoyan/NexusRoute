@@ -146,15 +146,8 @@ add_user_rules() {
     local USER_MAC=$3
     local XRAY_PORT=$4
     local MARK=$5
-    local TABLE_ID=$((100 + USER_ID - 1))
 
-    log_info "Adding rules: user${USER_ID} (${USER_IP}, mark=0x${MARK})"
-
-    # ==================== Policy Routing ====================
-    if ! ip route show table ${TABLE_ID} 2>/dev/null | grep -q "local 0.0.0.0/0"; then
-        ip rule add fwmark 0x${MARK} table ${TABLE_ID}
-        ip route add local 0.0.0.0/0 dev lo table ${TABLE_ID}
-    fi
+    log_info "Adding rules: user${USER_ID} (${USER_IP}, port=${XRAY_PORT})"
 
     # ==================== PREROUTING mangle (per-user) ====================
 
@@ -166,7 +159,7 @@ add_user_rules() {
         -j DROP
 
     # ==================== 内网流量豁免（关键！） ====================
-    # 不把访问内网的流量送进 TPROXY，否则网关 Web/DNS/DHCP 全部瘫痪
+    # 不把访问内网的流量送进代理，否则网关 Web/DNS/DHCP 全部瘫痪
     # 包括：LAN 设备访问网关自身、跨网段管理通道、广播包
     iptables -t mangle -A PREROUTING -i $LAN_IF \
         -s ${USER_IP} -d 192.168.0.0/16 \
@@ -185,33 +178,19 @@ add_user_rules() {
         -m comment --comment "user${USER_ID}: Bypass broadcast" \
         -j RETURN
 
-    # 标记合法外网流量（只有非内网流量才会被标记送入 TPROXY）
-    iptables -t mangle -A PREROUTING -i $LAN_IF \
-        -s ${USER_IP} \
-        -m mac --mac-source ${USER_MAC} \
-        -m comment --comment "user${USER_ID}: Mark" \
-        -j MARK --set-mark 0x${MARK}
-
-    # TCP → TPROXY 代理
-    iptables -t mangle -A PREROUTING -i $LAN_IF \
-        -p tcp -m mark --mark 0x${MARK} \
-        -m comment --comment "user${USER_ID}: TPROXY TCP" \
-        -j TPROXY --on-port ${XRAY_PORT} --tproxy-mark 0x${MARK}
-
-    # UDP → TPROXY 代理（排除 DHCP 端口 67/68，DHCP 是本机协议不需要代理）
-    iptables -t mangle -A PREROUTING -i $LAN_IF \
-        -p udp -m mark --mark 0x${MARK} \
-        -m multiport ! --dports 67,68 \
-        -m comment --comment "user${USER_ID}: TPROXY UDP" \
-        -j TPROXY --on-port ${XRAY_PORT} --tproxy-mark 0x${MARK}
-
     # 防线3: 阻断 ICMP（防止通过 ping 泄露真实 IP）
-    # 非 TCP/UDP/ICMP 协议（GRE/SCTP/ESP）不会被 TPROXY 规则匹配，
-    # 最终被 FORWARD DROP 策略阻断，无需额外 DROP 规则
     iptables -t mangle -A PREROUTING -i $LAN_IF \
         -s ${USER_IP} -p icmp \
         -m comment --comment "user${USER_ID}: Block ICMP" \
         -j DROP
+
+    # ==================== NAT REDIRECT (TCP 透明代理) ====================
+    # 使用 REDIRECT 替代 TPROXY（不需要 IP_TRANSPARENT，兼容性更好）
+    # DNS 由 dnsmasq 单独处理，UDP 流量由 FORWARD DROP 阻断（Kill Switch）
+    iptables -t nat -A PREROUTING -i $LAN_IF \
+        -s ${USER_IP} -p tcp \
+        -m comment --comment "user${USER_ID}: REDIRECT TCP" \
+        -j REDIRECT --to-port ${XRAY_PORT}
 
     log_info "user${USER_ID} rules added"
 }
@@ -256,14 +235,14 @@ show_rules() {
     echo "=== IPv4 Mangle PREROUTING (LAN=$LAN_IF) ==="
     iptables -t mangle -L PREROUTING -n -v --line-numbers 2>/dev/null
     echo ""
+    echo "=== IPv4 NAT PREROUTING (REDIRECT) ==="
+    iptables -t nat -L PREROUTING -n -v --line-numbers 2>/dev/null
+    echo ""
     echo "=== IPv6 (should be locked down) ==="
     ip6tables -L -n -v 2>/dev/null || echo "(ip6tables not available)"
     echo ""
     echo "=== IPv6 on $LAN_IF ==="
     sysctl net.ipv6.conf.$LAN_IF.disable_ipv6 2>/dev/null || echo "(not available)"
-    echo ""
-    echo "=== Policy Routing ==="
-    ip rule show | grep fwmark || echo "(none)"
 }
 
 # ==================== Main ====================
