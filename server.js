@@ -9,9 +9,18 @@ const crypto = require('crypto');
 
 const app = express();
 const PORT = 80;
-const JWT_SECRET = crypto.randomBytes(32).toString('hex');
 const DB_PATH = path.join(__dirname, 'db.sqlite');
 const CONFIG_PATH = path.join(__dirname, 'config.json');
+const SECRET_PATH = path.join(__dirname, '.jwt_secret');
+
+// JWT secret: persist to file so tokens survive restarts
+let JWT_SECRET;
+if (fs.existsSync(SECRET_PATH)) {
+    JWT_SECRET = fs.readFileSync(SECRET_PATH, 'utf8').trim();
+} else {
+    JWT_SECRET = crypto.randomBytes(32).toString('hex');
+    fs.writeFileSync(SECRET_PATH, JWT_SECRET);
+}
 
 // 读取配置（由 install.sh 生成）
 let config = { wan_if: 'eth0', lan_if: 'eth1', lan_ip: '192.168.100.1', lan_subnet: '192.168.100' };
