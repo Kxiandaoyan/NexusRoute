@@ -207,8 +207,8 @@ function generateXrayConfig(userId, nodes) {
             };
         }
 
-        if (index < nodes.length - 1) {
-            outbound.proxySettings = { tag: `hop${index + 2}` };
+        if (index > 0) {
+            outbound.proxySettings = { tag: `hop${index}` };
         }
 
         outbounds.push(outbound);
