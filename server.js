@@ -585,6 +585,24 @@ app.get('/api/user/nodes', (req, res) => {
 
 // ==================== 启动服务 ====================
 
+// Rebuild all user Xray configs on startup so any code change to
+// generateXrayConfig takes effect immediately without manual intervention.
+async function initUserConfigs() {
+    const users = db.prepare('SELECT id, name FROM users').all();
+    if (users.length === 0) return;
+    console.log(`[startup] 重建 ${users.length} 个用户的 Xray 配置...`);
+    for (const user of users) {
+        try {
+            await updateUserXray(user.id);
+            console.log(`[startup] ✓ ${user.name} 配置已更新`);
+        } catch (err) {
+            // Users without routes or nodes are expected to fail — not fatal
+            console.warn(`[startup] ✗ ${user.name} 跳过: ${err.message}`);
+        }
+    }
+    console.log('[startup] Xray 配置初始化完成');
+}
+
 app.listen(PORT, config.lan_ip, () => {
     console.log(`NexusRoute 服务已启动，监听 ${config.lan_ip}:${PORT}`);
     console.log(`用户前台: http://${config.lan_ip}/`);
@@ -592,6 +610,7 @@ app.listen(PORT, config.lan_ip, () => {
     console.log(`LAN接口: ${config.lan_if} | WAN接口: ${config.wan_if}`);
 
     monitorDevices();
+    initUserConfigs(); // Regenerate all user configs with the latest code
 });
 
 process.on('SIGTERM', () => {
