@@ -218,6 +218,14 @@ add_user_rules() {
         -m comment --comment "user${USER_ID}: REDIRECT TCP" \
         -j REDIRECT --to-port ${XRAY_PORT}
 
+    # REDIRECT UDP (non-DNS) so QUIC/HTTP3 and other UDP services
+    # pass through Xray instead of being silently dropped by FORWARD DROP.
+    # DNS UDP is already handled above (port 53 -> DNS_PORT).
+    iptables -t nat -A PREROUTING -i $LAN_IF \
+        -s ${USER_IP} -p udp \
+        -m comment --comment "user${USER_ID}: REDIRECT UDP" \
+        -j REDIRECT --to-port ${XRAY_PORT}
+
     log_info "user${USER_ID} rules added"
 }
 

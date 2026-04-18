@@ -216,12 +216,15 @@ function generateXrayConfig(userId, nodes) {
         outbounds.push(outbound);
     });
 
-    // DNS outbound: proxies DNS queries through the first hop to prevent DNS leaks
+    // DNS outbound: proxies DNS queries through the LAST hop so that DNS exit IP
+    // matches web traffic exit IP. If DNS exits from hop1 but web exits from hop2,
+    // CDN-based DNS returns IPs optimal for hop1's region, but hop2 connects to them —
+    // causing geo-locked or CDN-routed IPs to fail intermittently.
     outbounds.push({
         tag: 'dns-out',
         protocol: 'dns',
         settings: {},
-        proxySettings: { tag: 'hop1' }
+        proxySettings: { tag: `hop${nodes.length}` }
     });
 
     // Each user gets a unique DNS port (xray_port + 10000) to avoid port conflicts
