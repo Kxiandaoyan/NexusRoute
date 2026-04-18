@@ -369,9 +369,9 @@
                     const unauthorizedAlert = document.getElementById('unauthorizedAlert');
                     const configForm = document.getElementById('configForm');
 
-                    if (data.status === 'unauthorized' || data.status === 'configuring') {
+                    if (data.status === 'configuring') {
                         statusIndicator.className = 'status-indicator status-configuring';
-                        statusText.textContent = data.status === 'configuring' ? '配置中' : '未识别';
+                        statusText.textContent = '配置中';
                         exitIP.textContent = '-';
                         unauthorizedAlert.classList.remove('hidden');
                         configForm.style.display = 'none';

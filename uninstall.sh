@@ -53,13 +53,6 @@ for svc in $(systemctl list-units --type=service --all 2>/dev/null | grep -oP 'x
     log_info "Stopped $svc"
 done
 
-# Stop xray services (new naming: xray-userN)
-for svc in $(systemctl list-units --type=service --all 2>/dev/null | grep -oP 'xray-user\d+'); do
-    systemctl stop "$svc" 2>/dev/null || true
-    systemctl disable "$svc" 2>/dev/null || true
-    rm -f "/etc/systemd/system/${svc}.service"
-done
-
 systemctl stop nexusroute 2>/dev/null || true
 systemctl disable nexusroute 2>/dev/null || true
 rm -f /etc/systemd/system/nexusroute.service

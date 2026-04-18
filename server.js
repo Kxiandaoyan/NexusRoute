@@ -136,8 +136,9 @@ function monitorDevices() {
                 console.log(`新设备接入: ${hostname || mac} -> ${userName} (${ip})`);
             } catch (error) {
                 console.error(`注册设备 ${mac} 失败:`, error);
+            } finally {
+                isProcessing = false;
             }
-            isProcessing = false;
         }
     }, 15000); // 每15秒扫描一次
 }
@@ -172,6 +173,7 @@ function generateXrayConfig(userId, nodes) {
                 break;
             case 'shadowsocks':
             case 'ss':
+                outbound.protocol = 'shadowsocks';
                 outbound.settings = {
                     servers: [{ address: node.address, port: node.port, method: node.encryption || 'aes-256-gcm', password: node.password }]
                 };
@@ -214,14 +216,17 @@ function generateXrayConfig(userId, nodes) {
         outbounds.push(outbound);
     });
 
-    // DNS outbound: processes DNS queries through Xray's DNS subsystem
-    // queryStrategy: UseIPv4 filters out AAAA records, then chains through proxy
+    // DNS outbound: proxies DNS queries through the first hop to prevent DNS leaks
     outbounds.push({
         tag: 'dns-out',
         protocol: 'dns',
         settings: {},
         proxySettings: { tag: 'hop1' }
     });
+
+    // Each user gets a unique DNS port (xray_port + 10000) to avoid port conflicts
+    // when multiple Xray instances run simultaneously.
+    const dnsInPort = user.xray_port + 10000;
 
     return {
         log: { loglevel: 'warning' },
@@ -239,7 +244,7 @@ function generateXrayConfig(userId, nodes) {
                 streamSettings: { sockopt: { tproxy: 'redirect' } }
             },
             {
-                tag: 'dns-in', port: 5353, protocol: 'dokodemo-door',
+                tag: 'dns-in', port: dnsInPort, protocol: 'dokodemo-door',
                 settings: { address: '1.1.1.1', port: 53, network: 'tcp,udp' }
             }
         ],
@@ -304,9 +309,9 @@ async function updateUserXray(userId) {
 
     if (nodes.length === 0) throw new Error('没有有效的节点配置');
 
-    const config = generateXrayConfig(userId, nodes);
+    const xrayConfig = generateXrayConfig(userId, nodes);
     const configPath = `/usr/local/etc/xray/config-${user.name}.json`;
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    fs.writeFileSync(configPath, JSON.stringify(xrayConfig, null, 2));
 
     const serviceName = `xray-${user.name}`;
     await execCommand(`systemctl restart ${serviceName}`);

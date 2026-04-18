@@ -379,9 +379,9 @@
 
         <div class="main-content">
             <div class="tabs">
-                <button class="tab active" onclick="switchTab('nodes')">节点管理</button>
-                <button class="tab" onclick="switchTab('users')">用户列表</button>
-                <button class="tab" onclick="switchTab('system')">系统管理</button>
+                <button class="tab active" onclick="switchTab(event, 'nodes')">节点管理</button>
+                <button class="tab" onclick="switchTab(event, 'users')">用户列表</button>
+                <button class="tab" onclick="switchTab(event, 'system')">系统管理</button>
             </div>
 
             <!-- 节点管理 -->
@@ -600,7 +600,7 @@
         }
 
         // 切换标签
-        function switchTab(tabName) {
+        function switchTab(event, tabName) {
             document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
 
@@ -756,12 +756,12 @@
 
         // 解析 VLESS 链接
         function parseVlessLink(link) {
-            // vless://uuid@host:port?params#name
-            const match = link.match(/^vless:\/\/([^@]+)@([^:]+):(\d+)\?(.+?)(?:#(.+))?$/);
+            // vless://uuid@host:port?params#name  (query string is optional)
+            const match = link.match(/^vless:\/\/([^@]+)@([^:]+):(\d+)(?:\?(.+?))?(?:#(.+))?$/);
             if (!match) throw new Error('VLESS 链接格式错误');
 
             const [, uuid, host, port, paramsStr, name] = match;
-            const params = new URLSearchParams(paramsStr);
+            const params = new URLSearchParams(paramsStr || '');
 
             return {
                 protocol: 'vless',

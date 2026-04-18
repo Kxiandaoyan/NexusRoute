@@ -57,7 +57,7 @@ while true; do
     read -p "Select LAN interface (devices): " lan_num
     LAN_IF="${IFACES[$((lan_num - 1))]}"
     [ -n "$LAN_IF" ] && [ "$LAN_IF" != "$WAN_IF" ] && break
-    [ "$LAN_IF" = "$WAN_IF" ] ] && log_error "LAN must be different from WAN"
+    [ "$LAN_IF" = "$WAN_IF" ] && log_error "LAN must be different from WAN"
     log_error "Invalid selection"
 done
 
@@ -240,8 +240,9 @@ bind-dynamic
 no-resolv
 no-hosts
 
-# DNS via Xray
-server=127.0.0.1#5353
+# System DNS for gateway itself (client DNS is intercepted by iptables per-user)
+server=8.8.8.8
+server=1.1.1.1
 
 # DHCP - permanent lease, all devices get fixed IPs
 dhcp-range=$DHCP_START,$DHCP_END,infinite

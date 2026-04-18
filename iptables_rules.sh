@@ -184,10 +184,23 @@ add_user_rules() {
         -m comment --comment "user${USER_ID}: Block ICMP" \
         -j DROP
 
-    # ==================== NAT REDIRECT (TCP 透明代理) ====================
-    # 使用 REDIRECT 替代 TPROXY（不需要 IP_TRANSPARENT，兼容性更好）
-    # DNS 由 dnsmasq 单独处理，UDP 流量由 FORWARD DROP 阻断（Kill Switch）
-    # 先排除内网目的地（否则访问网关自身的 Web/DNS 也会被重定向）
+    # ==================== NAT REDIRECT ====================
+    # DNS port = xray_port + 10000, unique per user (mirrors generateXrayConfig in server.js)
+    local DNS_PORT=$((XRAY_PORT + 10000))
+
+    # DNS REDIRECT must come BEFORE LAN bypass rules so that DNS queries sent
+    # to the gateway IP (192.168.x.x) are intercepted and routed through each
+    # user's own Xray dns-in, not leaked to the shared dnsmasq forwarder.
+    iptables -t nat -A PREROUTING -i $LAN_IF \
+        -s ${USER_IP} -p udp --dport 53 \
+        -m comment --comment "user${USER_ID}: REDIRECT DNS UDP" \
+        -j REDIRECT --to-port ${DNS_PORT}
+    iptables -t nat -A PREROUTING -i $LAN_IF \
+        -s ${USER_IP} -p tcp --dport 53 \
+        -m comment --comment "user${USER_ID}: REDIRECT DNS TCP" \
+        -j REDIRECT --to-port ${DNS_PORT}
+
+    # Bypass LAN destinations (except DNS which was already handled above)
     iptables -t nat -A PREROUTING -i $LAN_IF \
         -s ${USER_IP} -d 192.168.0.0/16 \
         -m comment --comment "user${USER_ID}: Bypass LAN" \
